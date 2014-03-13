@@ -8,7 +8,7 @@ void setup() {
   Serial.begin(9600);
   
   // Switch input on pin 21
-  attachInterrupt(2, bumperISR, CHANGE);
+  attachInterrupt(2, bumperISR, RISING);
   lastBumperTriggerMillis = millis();
 }
 
