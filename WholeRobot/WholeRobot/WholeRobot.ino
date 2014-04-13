@@ -1,9 +1,4 @@
-//pin 2 on the hbridge is connected to pin 12 on arduino
-//pin 7 on hbridge connected to pin 11 on arduino
-// pin 11 and 12 on the arduino control motor 1
-// pin 15 on the hbridge is connected to pin 8 on arduino
-// pin 10 on the hbridge is connected to pin 7 on arduino
-// pin 7 and 8 on the arduino control motor 2
+#include "constants.h" // import custom types and constants
 
 // Debug Statements
 //#define DEBUG_COLOR // uncomment this line to enable printing color sensing debug statements
@@ -30,17 +25,18 @@
 #define BUMPER_DEBOUNCE_MILLIS 500
 int lastBumperTriggerMillis = 0;
 int bumperPressPending = false;
-typedef enum {NONE, FRONT, RIGHT, LEFT, BACK} bumper_t;
 bumper_t pendingBumper = NONE;
 
 // Color Detection
 #define RED_LED_PIN 2
 #define BLUE_LED_PIN 3
 #define COLOR_SENSOR_PIN A0
-const int RED = 0;
-const int BLUE = 1;
-const int BLACK = 2;
 int BLUE_PWM = 0; // Brightness of the blue LED
+
+// State 
+color_t currentColor = BLACK;
+state_t currentState = START_STATE;
+state_t lastState = (state_t)NULL;
 
 
 void setup(){
@@ -75,9 +71,40 @@ void setup(){
 }
 
 void loop(){
-  detectColor(100);
-  //forward(100);
+  Serial.print("current state: ");Serial.println(currentState);
+  Serial.print("current color: ");Serial.println(currentColor);
   
+  currentColor = detectColor(60);
+  
+  updateState();
+  
+  switch(currentState){
+    case START_STATE: handleStartState(); break;
+    case LINE_FOLLOW_STATE: handleLineFollowState(); break;
+    default: break;
+  }
+  
+  delay(100);
+}
+
+/*
+* STATE MANAGEMENT
+*/
+
+void updateState() {
+  if (currentState == START_STATE && currentColor != BLACK) {
+    lastState = currentState;
+    currentState = LINE_FOLLOW_STATE;
+  }
+}
+
+void handleStartState() {
+  forward(70);
+  delay(100);
+}
+
+void handleLineFollowState() {
+  stop();
   delay(100);
 }
 
@@ -110,9 +137,11 @@ void calibrateColorSensing() {
 }
   
   
-int detectColor(int threshold) {
+color_t detectColor(int threshold) {
   int red = getRedLedValue();
   int blue = getBlueLedValue();
+  analogWrite(RED_LED_PIN, 0);
+  analogWrite(BLUE_LED_PIN, 0); // disable both leds so that the color sensor is not affected in between reads.
   //COLOR_PRINT("red:");COLOR_PRINTLN(red);
   //COLOR_PRINT("blue:");COLOR_PRINTLN(blue);
   if ((red - blue) > threshold) {
@@ -244,14 +273,14 @@ void stop(int m1_high, int m1_low, int m2_high, int m2_low) {
   
 
 void setHighPin(int high_pin, int low_pin, int speed) {
-  if (speed > 255) return;
+  if (speed > 255) speed = 255;
   
   digitalWrite(low_pin, LOW);
   analogWrite(high_pin, speed);
 }
 
 void setLowPin(int high_pin, int low_pin, int speed) {
-  if (speed > 255) return;
+  if (speed > 255) speed = 255;
   
   digitalWrite(high_pin, LOW);
   analogWrite(low_pin, speed);
