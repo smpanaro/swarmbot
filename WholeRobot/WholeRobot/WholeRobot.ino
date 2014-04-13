@@ -6,7 +6,14 @@
 // pin 7 and 8 on the arduino control motor 2
 
 // Debug Statements
-boolean DEBUG_COLOR = false;
+//#define DEBUG_COLOR // uncomment this line to enable printing color sensing debug statements
+#ifdef DEBUG_COLOR
+  #define COLOR_PRINT(x) Serial.print (x)
+  #define COLOR_PRINTLN(x)  Serial.println (x)
+#else
+  #define COLOR_PRINT(x)
+  #define COLOR_PRINTLN(x)
+#endif
 
 // Motor Pins
 #define M1_HIGH_PIN 12
@@ -64,12 +71,12 @@ void setup(){
    // Color Pins
    pinMode(RED_LED_PIN, OUTPUT);
    pinMode(BLUE_LED_PIN, OUTPUT);
-   //calibrateColorSensing(); // this is a long ish (2-3 second) function
+   calibrateColorSensing(); // this is a long ish (2-3 second) function
 }
 
 void loop(){
-  //detectColor(100);
-  forward(100);
+  detectColor(100);
+  //forward(100);
   
   delay(100);
 }
@@ -87,12 +94,10 @@ void calibrateColorSensing() {
      BLUE_PWM++;
      last_difference = difference;
      difference = getRedLedValue() - getBlueLedValue();
-     if (DEBUG_COLOR) {
-       Serial.print("blue pwm:");Serial.println(BLUE_PWM);
-       Serial.print("diff:");Serial.println(difference);
-       Serial.print("last diff:");Serial.println(last_difference);
-       Serial.println();
-     }
+       COLOR_PRINT("blue pwm:");COLOR_PRINTLN(BLUE_PWM);
+       COLOR_PRINT("diff:");COLOR_PRINTLN(difference);
+       COLOR_PRINT("last diff:");COLOR_PRINTLN(last_difference);
+       COLOR_PRINTLN();
      delay(100);
    }
    
@@ -100,28 +105,25 @@ void calibrateColorSensing() {
    difference = getRedLedValue() - getBlueLedValue();
    
    // TODO: Potentially set color detection threshold based on the difference?
-   
-   if (DEBUG_COLOR) {
-     Serial.print("FINAL blue pwm:");Serial.println(BLUE_PWM);
-     Serial.print("FINAL diff:");Serial.println(difference);
-   }
+   COLOR_PRINT("FINAL blue pwm:");COLOR_PRINTLN(BLUE_PWM);
+   COLOR_PRINT("FINAL diff:");COLOR_PRINTLN(difference);
 }
   
   
 int detectColor(int threshold) {
   int red = getRedLedValue();
   int blue = getBlueLedValue();
-  //Serial.print("red:");Serial.println(red);
-  //Serial.print("blue:");Serial.println(blue);
+  //COLOR_PRINT("red:");COLOR_PRINTLN(red);
+  //COLOR_PRINT("blue:");COLOR_PRINTLN(blue);
   if ((red - blue) > threshold) {
-    Serial.println("red");
+    COLOR_PRINTLN("red");
     return RED;
   }
   else if ((blue - red) > threshold){
-     Serial.println("blue");
+     COLOR_PRINTLN("blue");
      return BLUE;
   }
-  Serial.println("black");
+  COLOR_PRINTLN("black");
   return BLACK;
 }
 
