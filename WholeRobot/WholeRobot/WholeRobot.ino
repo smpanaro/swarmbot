@@ -5,6 +5,9 @@
 // pin 10 on the hbridge is connected to pin 7 on arduino
 // pin 7 and 8 on the arduino control motor 2
 
+// Debug Statements
+boolean DEBUG_COLOR = false;
+
 // Motor Pins
 #define M1_HIGH_PIN 12
 #define M1_LOW_PIN 11
@@ -30,7 +33,7 @@ bumper_t pendingBumper = NONE;
 const int RED = 0;
 const int BLUE = 1;
 const int BLACK = 2;
-int BLUE_PWM = 0;
+int BLUE_PWM = 0; // Brightness of the blue LED
 
 
 void setup(){
@@ -61,39 +64,50 @@ void setup(){
    // Color Pins
    pinMode(RED_LED_PIN, OUTPUT);
    pinMode(BLUE_LED_PIN, OUTPUT);
-   // TODO: DO we need to set the color sensor pin to input?
-   
-   BLUE_PWM = 0;
-   int threshold = 20;
-   int difference = getRedLedValue() - getBlueLedValue();;
-   int last_difference = abs(difference) + 1;
-   while (abs(last_difference) > abs(difference)) {
-     BLUE_PWM++;
-     last_difference = difference;
-     difference = getRedLedValue() - getBlueLedValue();
-     Serial.print("blue pwm:");Serial.println(BLUE_PWM);
-     Serial.print("diff:");Serial.println(difference);
-     Serial.print("last diff:");Serial.println(last_difference);
-     Serial.println();
-     delay(200);
-   }
-   BLUE_PWM--;   
-   difference = getRedLedValue() - getBlueLedValue();
-        Serial.print("FINAL blue pwm:");Serial.println(BLUE_PWM);
-     Serial.print("FINAL diff:");Serial.println(difference);
- 
+   //calibrateColorSensing(); // this is a long ish (2-3 second) function
 }
 
 void loop(){
-  detectColor(100);
+  //detectColor(100);
+  forward(100);
   
-  delay(200);
+  delay(100);
 }
 
 /*
 * COLOR DETECTION
 */
 
+void calibrateColorSensing() {
+   BLUE_PWM = 0;
+   int difference = getRedLedValue() - getBlueLedValue();;
+   int last_difference = abs(difference) + 1;
+   
+   while (abs(last_difference) > abs(difference)) {
+     BLUE_PWM++;
+     last_difference = difference;
+     difference = getRedLedValue() - getBlueLedValue();
+     if (DEBUG_COLOR) {
+       Serial.print("blue pwm:");Serial.println(BLUE_PWM);
+       Serial.print("diff:");Serial.println(difference);
+       Serial.print("last diff:");Serial.println(last_difference);
+       Serial.println();
+     }
+     delay(100);
+   }
+   
+   BLUE_PWM--;   
+   difference = getRedLedValue() - getBlueLedValue();
+   
+   // TODO: Potentially set color detection threshold based on the difference?
+   
+   if (DEBUG_COLOR) {
+     Serial.print("FINAL blue pwm:");Serial.println(BLUE_PWM);
+     Serial.print("FINAL diff:");Serial.println(difference);
+   }
+}
+  
+  
 int detectColor(int threshold) {
   int red = getRedLedValue();
   int blue = getBlueLedValue();
