@@ -12,8 +12,9 @@
 #endif
 
 // Motor Pins
-#define M1_HIGH_PIN 12
-#define M1_LOW_PIN 11
+// all need to be on analogWrite-able pins. (2 - 13 and 44 - 46)
+#define M1_HIGH_PIN 3
+#define M1_LOW_PIN 2
 #define M2_HIGH_PIN 7
 #define M2_LOW_PIN 8
 
@@ -29,10 +30,10 @@ int bumperPressPending = false;
 bumper_t pendingBumper = NONE;
 
 // Color Detection
-#define RED_LED_PIN 2
-#define BLUE_LED_PIN 3
+#define RED_LED_PIN 31
+#define BLUE_LED_PIN 45 // needs to be on one of the analogWrite-able pins.
 #define COLOR_SENSOR_PIN A0
-int BLUE_PWM = 0; // Brightness of the blue LED
+int BLUE_PWM = 0; // Brightness of the blue LED ~13 during the day, ~53 at night
 
 // State 
 volatile color_t currentColor = BLACK; // volatile since this is updated in an ISR
@@ -41,7 +42,7 @@ state_t lastState = (state_t)NULL;
 
 // Configuration
 const int FORWARD_SPEED = 70;
-const int COLOR_DETECTION_DELTA = 70;
+const int COLOR_DETECTION_DELTA = 100;
 
 void setup(){
    
@@ -52,6 +53,7 @@ void setup(){
    pinMode(M1_LOW_PIN, OUTPUT); 
    pinMode(M2_HIGH_PIN, OUTPUT);
    pinMode(M2_LOW_PIN, OUTPUT);
+  
    
    // Setup Clock for Carrier Frequency
    // see IR sketch for register explanations
@@ -72,17 +74,17 @@ void setup(){
    pinMode(RED_LED_PIN, OUTPUT);
    pinMode(BLUE_LED_PIN, OUTPUT);
    calibrateColorSensing(); // this is a long ish (2-3 second) function
-   Timer1.initialize();
    delay(100); // let the sensor rest before the first interrupt
+   Timer1.initialize(); // THIS OBLITERATES PINS 9-13
    Timer1.attachInterrupt(colorSensorISR, 250000); // NOTE: This breaks analogWrite on digital pins 9 and 10!
 }
 
 void loop(){
-  //Serial.print("current state: ");Serial.println(currentState);
-  //Serial.print("current color: ");Serial.println(currentColor);
+  Serial.print("current state: ");Serial.println(currentState);
+  Serial.print("current color: ");Serial.println(currentColor);
 
   //currentColor = detectColor(COLOR_DETECTION_DELTA);
-  //delay(1000); return;
+  delay(1000); return;
 
   updateState();
   
@@ -133,22 +135,24 @@ void handleLineSearchState() {
 
 void calibrateColorSensing() {
    BLUE_PWM = 0;
-   int difference = getRedLedValue(false) - getBlueLedValue(false);
-   int last_difference = abs(difference) + 1;
-   
-   while (abs(last_difference) > abs(difference)) {
+   int redVal = getRedLedValue(false);
+   int blueVal = getBlueLedValue(false);
+   int difference = abs(redVal) - abs(blueVal);
+
+   while (difference > COLOR_DETECTION_DELTA) {
+     if (difference > 2 * COLOR_DETECTION_DELTA) BLUE_PWM += 4;
      BLUE_PWM++;
-     last_difference = difference;
-     difference = getRedLedValue(false) - getBlueLedValue(false);
-       COLOR_PRINT("blue pwm:");COLOR_PRINTLN(BLUE_PWM);
-       COLOR_PRINT("diff:");COLOR_PRINTLN(difference);
-       COLOR_PRINT("last diff:");COLOR_PRINTLN(last_difference);
-       COLOR_PRINTLN();
+     redVal = getRedLedValue(false);
+     blueVal = getBlueLedValue(false);
+     difference = abs(redVal) - abs(blueVal);
+     COLOR_PRINT("blue pwm:");COLOR_PRINTLN(BLUE_PWM);
+     COLOR_PRINT("diff:");COLOR_PRINTLN(difference);
+     COLOR_PRINTLN();
      delay(100);
    }
    
-   BLUE_PWM--;   
-   difference = getRedLedValue(false) - getBlueLedValue(false);
+   // no matter the difference we want red to be higher than blue (see how detectColor works for why)
+   if (redVal > blueVal) BLUE_PWM--;
    
    // TODO: Potentially set color detection threshold based on the difference?
    COLOR_PRINT("FINAL blue pwm:");COLOR_PRINTLN(BLUE_PWM);
@@ -163,10 +167,10 @@ void colorSensorISR() {
 color_t detectColor(int threshold) {
   int red = getRedLedValue(true);
   int blue = getBlueLedValue(true);
-  analogWrite(RED_LED_PIN, 0);
+  digitalWrite(RED_LED_PIN, LOW);
   analogWrite(BLUE_LED_PIN, 0); // disable both leds so that the color sensor is not affected in between reads.
-  //COLOR_PRINT("red:");COLOR_PRINTLN(red);
-  //COLOR_PRINT("blue:");COLOR_PRINTLN(blue);
+  COLOR_PRINT("red:");COLOR_PRINTLN(red);
+  COLOR_PRINT("blue:");COLOR_PRINTLN(blue);
   if ((red - blue) > threshold) {
     COLOR_PRINTLN("red");
     return RED;
@@ -180,7 +184,7 @@ color_t detectColor(int threshold) {
 }
 
 int getRedLedValue(boolean inISR) {
-  analogWrite(RED_LED_PIN, 255);
+  digitalWrite(RED_LED_PIN, HIGH);
   analogWrite(BLUE_LED_PIN, 0);
   // delay(100) when we're calibrating so we get a very stable read.
  // delayMicroseconds works in the ISR and we don't need a long delay. - 16383 is the max value. 
@@ -190,7 +194,7 @@ int getRedLedValue(boolean inISR) {
 }
 
 int getBlueLedValue(boolean inISR) {
-  analogWrite(RED_LED_PIN, 0);
+  digitalWrite(RED_LED_PIN, LOW);
   analogWrite(BLUE_LED_PIN, BLUE_PWM);
   if (!inISR) delay(100);
   else delayMicroseconds(10000);
