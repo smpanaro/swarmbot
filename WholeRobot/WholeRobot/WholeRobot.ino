@@ -13,8 +13,8 @@
 
 // Motor Pins
 // all need to be on analogWrite-able pins. (2 - 13 and 44 - 46)
-#define M1_HIGH_PIN 3
-#define M1_LOW_PIN 2
+#define M1_HIGH_PIN 6
+#define M1_LOW_PIN 4
 #define M2_HIGH_PIN 7
 #define M2_LOW_PIN 8
 
@@ -42,6 +42,7 @@ state_t lastState = (state_t)NULL;
 
 // Configuration
 const int FORWARD_SPEED = 70;
+const int SEARCH_FORWARD_SPEED = 60;
 const int COLOR_DETECTION_DELTA = 100;
 
 void setup(){
@@ -74,17 +75,16 @@ void setup(){
    pinMode(RED_LED_PIN, OUTPUT);
    pinMode(BLUE_LED_PIN, OUTPUT);
    calibrateColorSensing(); // this is a long ish (2-3 second) function
-   delay(100); // let the sensor rest before the first interrupt
-   Timer1.initialize(); // THIS OBLITERATES PINS 9-13
-   Timer1.attachInterrupt(colorSensorISR, 250000); // NOTE: This breaks analogWrite on digital pins 9 and 10!
+   delay(100); // let the sensor rest before the first interrupt (prevents false positive on first reading)
+   Timer1.initialize(); // THIS OBLITERATES PINS 9-13 - probe them if you think you can use them.
+   Timer1.attachInterrupt(colorSensorISR, 150000); // NOTE: Docs say this breaks analogWrite on digital pins 9 and 10!
 }
 
 void loop(){
   Serial.print("current state: ");Serial.println(currentState);
   Serial.print("current color: ");Serial.println(currentColor);
-
-  //currentColor = detectColor(COLOR_DETECTION_DELTA);
-  delay(1000); return;
+  
+  //delay(1000); return;
 
   updateState();
   
@@ -94,6 +94,8 @@ void loop(){
     case LINE_SEARCH_STATE: handleLineSearchState(); break;
     default: break;
   }
+  
+  delay(100); // need this or our loop gets frozen sometimes
 }
 
 /*
@@ -121,12 +123,42 @@ void handleStartState() {
 }
 
 void handleLineFollowState() {
-  stop();
+  forward(SEARCH_FORWARD_SPEED);
   delay(100);
+  
+  if (lastState == START_STATE) {
+    turn('l', 90);
+  }
 }
 
 void handleLineSearchState() {
   stop();
+  delay(100);
+  
+  int angle = 30;
+  turn('l', angle);
+  //forward(SEARCH_FORWARD_SPEED); delay(500);
+  stop(); delay(100);
+  
+  if (currentColor != BLACK) {
+    //turn('l', angle);
+    return;
+  }
+  
+  //reverse(SEARCH_FORWARD_SPEED); delay(500);
+  stop(); delay(100);
+  turn('r', 2*angle);
+  //forward(SEARCH_FORWARD_SPEED); delay(500);
+  stop(); delay(100);
+  
+  if (currentColor != BLACK) {
+    //turn('r', angle);
+    return;
+  }
+  
+  // If we can't find it, back up a bit (towards the line) and we'll try again on the next loop.
+  reverse(SEARCH_FORWARD_SPEED); delay(500);
+  stop(); delay(100);
 }
 
 /*
@@ -169,8 +201,8 @@ color_t detectColor(int threshold) {
   int blue = getBlueLedValue(true);
   digitalWrite(RED_LED_PIN, LOW);
   analogWrite(BLUE_LED_PIN, 0); // disable both leds so that the color sensor is not affected in between reads.
-  COLOR_PRINT("red:");COLOR_PRINTLN(red);
-  COLOR_PRINT("blue:");COLOR_PRINTLN(blue);
+  //COLOR_PRINT("red:");COLOR_PRINTLN(red);
+  //COLOR_PRINT("blue:");COLOR_PRINTLN(blue);
   if ((red - blue) > threshold) {
     COLOR_PRINTLN("red");
     return RED;
@@ -266,32 +298,34 @@ void left(int speed) {
 }
 
 void left(int m1_high, int m1_low, int m2_high, int m2_low, int speed) {
-  setLowPin(m1_high, m1_low, speed);
-  setLowPin(m2_high, m2_low, speed);
+  setHighPin(m1_high, m1_low, speed);
+  setHighPin(m2_high, m2_low, speed);
 }
 void right(int speed) {
   right(M1_HIGH_PIN, M1_LOW_PIN, M2_HIGH_PIN, M2_LOW_PIN, speed);
 }
 
 void right(int m1_high, int m1_low, int m2_high, int m2_low, int speed) {
-  setHighPin(m1_high, m1_low, speed);
-  setHighPin(m2_high, m2_low, speed);
+  setLowPin(m1_high, m1_low, speed);
+  setLowPin(m2_high, m2_low, speed);
 }
 
 void turn(char dir, int angle){
   if(dir == 'l'){
     left(87);
-    delay(1200*(angle/90));
+    delay(1200*(float(angle)/90));
     stop();
     delay(200);
   }
   else if(dir == 'r'){
     right(87);
-    delay(1200*(angle/90));
+    delay(1200.0*(float(angle)/90.0));
     stop();
     delay(200);
   }
 }
+
+
 
 void stop() {
   stop(M1_HIGH_PIN, M1_LOW_PIN, M2_HIGH_PIN, M2_LOW_PIN);
