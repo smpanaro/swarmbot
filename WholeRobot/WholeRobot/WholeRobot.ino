@@ -54,6 +54,9 @@ state_t lastState = (state_t)NULL;
 // Configuration
 const int FORWARD_SPEED = 70;
 const int SEARCH_FORWARD_SPEED = 60;
+const int TURN_SPEED = 70;
+const int MILLIS_TO_TURN_90 = 500;
+
 const int COLOR_DETECTION_DELTA = 70;
 
 void setup(){
@@ -96,8 +99,6 @@ void setup(){
 void loop(){
   Serial.print("current state: ");Serial.print(currentState);
   Serial.print("current color: ");Serial.println(currentColor);
-  
-  //delay(100); return;
 
   updateState();
   
@@ -108,7 +109,7 @@ void loop(){
     default: break;
   }
   
-  delay(100); // need this or our loop gets frozen sometimes
+  //delay(100); // need this or our loop gets frozen sometimes
 }
 
 /*
@@ -137,14 +138,17 @@ void handleStartState() {
 
 void handleLineFollowState() {
   if (lastState == START_STATE) {
+    //TODO: We might overshoot here. Might need to shuffle ourselves to be on the line.
     stop(); delay(100);
-    turn('l', 90);
-    // Clear last state.
-    lastState = START_STATE;
+    turn('r', 70);
   }
   
-  forward(SEARCH_FORWARD_SPEED);
-  delay(100);
+  if (lastState != LINE_FOLLOW_STATE) {
+    // Clear last state. No need to go forward and delay if we're already moving.
+    lastState = LINE_FOLLOW_STATE;
+    forward(SEARCH_FORWARD_SPEED);
+    delay(100);  
+  }
 }
 
 void handleLineSearchState() {
@@ -152,11 +156,10 @@ void handleLineSearchState() {
   delay(100);
   
   int angle = 90;
-  int turnSpeed = 70;
   
   // Step 1 - Turn left angle degrees, stopping if we see color.
-  left(turnSpeed);
-  delayWhileColorNotDetected(1200*(float(angle)/90.0));
+  left(TURN_SPEED);
+  delayWhileColorNotDetected(MILLIS_TO_TURN_90*(float(angle)/90.0));
   stop(); delay(100);
   
   if (currentColor != BLACK) {
@@ -166,8 +169,8 @@ void handleLineSearchState() {
   }
   
   // Step 2 - If no color so far, turn right 2*angle degrees. Again stop if we see color.
-  right(turnSpeed);
-  delayWhileColorNotDetected(1200*(float(angle)/90.0));
+  right(TURN_SPEED);
+  delayWhileColorNotDetected(MILLIS_TO_TURN_90*(float(2*angle)/90.0));
   stop(); delay(100);
   
   if (currentColor != BLACK) {
@@ -182,12 +185,10 @@ void handleLineSearchState() {
 }
 
 // Delay for delayMillis or until a color is detected.
-void delayWhileColorNotDetected(int delayMillis) {
-  int startTime = millis();
-  int delayStep = delayMillis/10;
-  while (millis() - startTime < delayMillis) {
+void delayWhileColorNotDetected(unsigned long delayMillis) {
+  unsigned long endTime = millis() + delayMillis;
+  while (millis() < endTime) {
     if (currentColor != BLACK) break;
-    delay(delayStep);
   } 
 }
 
@@ -288,8 +289,6 @@ color_t detectColor() {
 int getRedLedValue(boolean inISR) {
   digitalWrite(RED_LED_PIN, HIGH);
   analogWrite(BLUE_LED_PIN, 0);
-  // delay(100) when we're calibrating so we get a very stable read.
- // delayMicroseconds works in the ISR and we don't need a long delay. - 16383 is the max value. 
   if (!inISR) delayMicroseconds(10000);//delay(100);
   else delayMicroseconds(10000);
   return analogRead(COLOR_SENSOR_PIN);
@@ -382,14 +381,14 @@ void right(int m1_high, int m1_low, int m2_high, int m2_low, int speed) {
 
 void turn(char dir, int angle){
   if(dir == 'l'){
-    left(87);
-    delay(1200*(float(angle)/90));
+    left(TURN_SPEED);
+    delay(MILLIS_TO_TURN_90*(float(angle)/90.0));
     stop();
     delay(200);
   }
   else if(dir == 'r'){
-    right(87);
-    delay(1200.0*(float(angle)/90.0));
+    right(TURN_SPEED);
+    delay(MILLIS_TO_TURN_90*(float(angle)/90.0));
     stop();
     delay(200);
   }
