@@ -2,7 +2,7 @@
 #include "constants.h" // import custom types and constants
 
 // Debug Statements
-#define DEBUG_COLOR // uncomment this line to enable printing color sensing debug statements
+//#define DEBUG_COLOR // uncomment this line to enable printing color sensing debug statements
 #ifdef DEBUG_COLOR
   #define COLOR_PRINT(x) Serial.print (x)
   #define COLOR_PRINTLN(x)  Serial.println (x)
@@ -33,6 +33,12 @@ bumper_t pendingBumper = NONE;
 #define RED_LED_PIN 31
 #define BLUE_LED_PIN 45 // needs to be on one of the analogWrite-able pins.
 #define COLOR_SENSOR_PIN A0
+#define COLOR_BUFFER_SIZE 10 // higher numbers dampen noise, lower numbers allow for quicker switching time
+volatile int numReds = 0;
+volatile int numBlacks = COLOR_BUFFER_SIZE;
+volatile int numBlues = 0;
+volatile int colorBufferIndex = 0;
+volatile color_t colorBuffer[COLOR_BUFFER_SIZE]; // dynamically filled in colorCalibration function;
 int BLUE_PWM = 0; // Brightness of the blue LED ~13 during the day, ~53 at night
 
 // State 
@@ -43,7 +49,7 @@ state_t lastState = (state_t)NULL;
 // Configuration
 const int FORWARD_SPEED = 70;
 const int SEARCH_FORWARD_SPEED = 60;
-const int COLOR_DETECTION_DELTA = 100;
+const int COLOR_DETECTION_DELTA = 70;
 
 void setup(){
    
@@ -77,14 +83,14 @@ void setup(){
    calibrateColorSensing(); // this is a long ish (2-3 second) function
    delay(100); // let the sensor rest before the first interrupt (prevents false positive on first reading)
    Timer1.initialize(); // THIS OBLITERATES PINS 9-13 - probe them if you think you can use them.
-   Timer1.attachInterrupt(colorSensorISR, 150000); // NOTE: Docs say this breaks analogWrite on digital pins 9 and 10!
+   Timer1.attachInterrupt(colorSensorISR, 50000); // NOTE: Docs say this breaks analogWrite on digital pins 9 and 10!
 }
 
 void loop(){
   Serial.print("current state: ");Serial.println(currentState);
   Serial.print("current color: ");Serial.println(currentColor);
   
-  //delay(1000); return;
+  delay(100); return;
 
   updateState();
   
@@ -123,42 +129,59 @@ void handleStartState() {
 }
 
 void handleLineFollowState() {
+  if (lastState == START_STATE) {
+    stop(); delay(100);
+    turn('l', 90);
+    // Clear last state.
+    lastState = START_STATE;
+  }
+  
   forward(SEARCH_FORWARD_SPEED);
   delay(100);
-  
-  if (lastState == START_STATE) {
-    turn('l', 90);
-  }
 }
 
 void handleLineSearchState() {
   stop();
   delay(100);
   
-  int angle = 30;
-  turn('l', angle);
-  //forward(SEARCH_FORWARD_SPEED); delay(500);
+  int angle = 90;
+  int turnSpeed = 70;
+  
+  // Step 1 - Turn left angle degrees, stopping if we see color.
+  left(turnSpeed);
+  delayWhileColorNotDetected(1200*(float(angle)/90.0));
   stop(); delay(100);
   
   if (currentColor != BLACK) {
-    //turn('l', angle);
+    // Back on track, so course correct a tiny bit -- the path isn't perfectly straight.
+    turn('l', 5);
     return;
   }
   
-  //reverse(SEARCH_FORWARD_SPEED); delay(500);
-  stop(); delay(100);
-  turn('r', 2*angle);
-  //forward(SEARCH_FORWARD_SPEED); delay(500);
+  // Step 2 - If no color so far, turn right 2*angle degrees. Again stop if we see color.
+  right(turnSpeed);
+  delayWhileColorNotDetected(1200*(float(angle)/90.0));
   stop(); delay(100);
   
   if (currentColor != BLACK) {
-    //turn('r', angle);
+    // Back on track, so course correct a tiny bit -- the path isn't perfectly straight.
+    turn('r', 5);
     return;
   }
   
-  // If we can't find it, back up a bit (towards the line) and we'll try again on the next loop.
-  reverse(SEARCH_FORWARD_SPEED); delay(500);
+  // If we still can't find it, back up a bit (towards the line) and we'll try again on the next loop.
+  reverse(SEARCH_FORWARD_SPEED); delay(200);
   stop(); delay(100);
+}
+
+// Delay for delayMillis or until a color is detected.
+void delayWhileColorNotDetected(int delayMillis) {
+  int startTime = millis();
+  int delayStep = delayMillis/10;
+  while (millis() - startTime < delayMillis) {
+    if (currentColor != BLACK) break;
+    delay(delayStep);
+  } 
 }
 
 /*
@@ -170,6 +193,8 @@ void calibrateColorSensing() {
    int redVal = getRedLedValue(false);
    int blueVal = getBlueLedValue(false);
    int difference = abs(redVal) - abs(blueVal);
+   
+   COLOR_PRINT("initial diff:"); COLOR_PRINTLN(difference);
 
    while (difference > COLOR_DETECTION_DELTA) {
      if (difference > 2 * COLOR_DETECTION_DELTA) BLUE_PWM += 4;
@@ -184,11 +209,21 @@ void calibrateColorSensing() {
    }
    
    // no matter the difference we want red to be higher than blue (see how detectColor works for why)
-   if (redVal > blueVal) BLUE_PWM--;
+   if (redVal > blueVal) {
+     BLUE_PWM--;
+     difference = abs(redVal) - abs(blueVal);
+   }
    
    // TODO: Potentially set color detection threshold based on the difference?
    COLOR_PRINT("FINAL blue pwm:");COLOR_PRINTLN(BLUE_PWM);
    COLOR_PRINT("FINAL diff:");COLOR_PRINTLN(difference);
+   
+   // try moving average
+   for (int i = 0; i < COLOR_BUFFER_SIZE; i++) {
+     colorBuffer[i] = BLACK;
+   }
+   numBlacks = COLOR_BUFFER_SIZE;
+   colorBufferIndex = 0;
 }
 
 
@@ -203,15 +238,52 @@ color_t detectColor(int threshold) {
   analogWrite(BLUE_LED_PIN, 0); // disable both leds so that the color sensor is not affected in between reads.
   //COLOR_PRINT("red:");COLOR_PRINTLN(red);
   //COLOR_PRINT("blue:");COLOR_PRINTLN(blue);
+  
+  color_t color = BLACK;
+  
   if ((red - blue) > threshold) {
-    COLOR_PRINTLN("red");
-    return RED;
+    //COLOR_PRINTLN("red");
+    color = RED;
+    //return RED;
   }
   else if ((blue - red) > threshold){
-     COLOR_PRINTLN("blue");
-     return BLUE;
+     //COLOR_PRINTLN("blue");
+     color = BLUE;
+     //return BLUE;
   }
-  COLOR_PRINTLN("black");
+  //COLOR_PRINTLN("black");
+  //return BLACK;
+  
+    // try using a moving average buffer
+  color_t oldColor = colorBuffer[colorBufferIndex];
+  colorBuffer[colorBufferIndex] = color;
+  colorBufferIndex = (colorBufferIndex + 1) % COLOR_BUFFER_SIZE;
+  
+  // Update totals
+  switch(oldColor) {
+    case RED: numReds--; break;
+    case BLUE: numBlues--; break;
+    case BLACK: numBlacks--; break;
+    default: break;
+  }
+  
+  switch(color) {
+    case RED: numReds++; break;
+    case BLUE: numBlues++; break;
+    case BLACK: numBlacks++; break;
+    default: break;
+  }
+  
+  // Too many consecutive print statements don't let the interrupt finish in enough time.
+  // Don't uncomment all of them.
+    //COLOR_PRINT("numReds:");COLOR_PRINTLN(numReds);
+  //COLOR_PRINT("numBlues:");COLOR_PRINTLN(numBlues);
+  //COLOR_PRINT("numBlacks:");COLOR_PRINTLN(numBlacks);
+  //COLOR_PRINT("currentIdx:");COLOR_PRINTLN(colorBufferIndex);
+  //COLOR_PRINT("total:");COLOR_PRINTLN(numReds+numBlues+numBlacks);
+  
+  if (numReds > numBlues && numReds > numBlacks) return RED;
+  else if (numBlues > numReds && numBlues > numBlacks) return BLUE;
   return BLACK;
 }
 
@@ -220,7 +292,7 @@ int getRedLedValue(boolean inISR) {
   analogWrite(BLUE_LED_PIN, 0);
   // delay(100) when we're calibrating so we get a very stable read.
  // delayMicroseconds works in the ISR and we don't need a long delay. - 16383 is the max value. 
-  if (!inISR) delay(100);
+  if (!inISR) delayMicroseconds(10000);//delay(100);
   else delayMicroseconds(10000);
   return analogRead(COLOR_SENSOR_PIN);
 }
@@ -228,7 +300,7 @@ int getRedLedValue(boolean inISR) {
 int getBlueLedValue(boolean inISR) {
   digitalWrite(RED_LED_PIN, LOW);
   analogWrite(BLUE_LED_PIN, BLUE_PWM);
-  if (!inISR) delay(100);
+  if (!inISR) delayMicroseconds(10000);//delay(100);
   else delayMicroseconds(10000);
   return analogRead(COLOR_SENSOR_PIN);
 }
