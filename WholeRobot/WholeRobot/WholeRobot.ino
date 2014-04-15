@@ -30,6 +30,9 @@ int bumperPressPending = false;
 bumper_t pendingBumper = NONE;
 
 // Color Detection
+// THE ONLY Constants you should need to tweak are the base values.
+// (Turn on color printing to see the typical red and blue values to set the bases to.)
+// For whatever reason the first few reads are ~100 higher than all other reads.
 #define RED_LED_PIN 31
 #define BLUE_LED_PIN 45 // needs to be on one of the analogWrite-able pins.
 #define COLOR_SENSOR_PIN A0
@@ -39,7 +42,9 @@ volatile int numBlacks = COLOR_BUFFER_SIZE;
 volatile int numBlues = 0;
 volatile int colorBufferIndex = 0;
 volatile color_t colorBuffer[COLOR_BUFFER_SIZE]; // dynamically filled in colorCalibration function;
-int BLUE_PWM = 0; // Brightness of the blue LED ~13 during the day, ~53 at night
+int BLUE_PWM = 0; // Brightness of the blue LED
+volatile int RED_BASE = 450;
+volatile int BLUE_BASE = 450;
 
 // State 
 volatile color_t currentColor = BLACK; // volatile since this is updated in an ISR
@@ -84,13 +89,15 @@ void setup(){
    delay(100); // let the sensor rest before the first interrupt (prevents false positive on first reading)
    Timer1.initialize(); // THIS OBLITERATES PINS 9-13 - probe them if you think you can use them.
    Timer1.attachInterrupt(colorSensorISR, 50000); // NOTE: Docs say this breaks analogWrite on digital pins 9 and 10!
+   //COLOR_PRINT("blue base:");COLOR_PRINT(BLUE_BASE);
+   //COLOR_PRINT(" red base:");COLOR_PRINTLN(RED_BASE);
 }
 
 void loop(){
-  Serial.print("current state: ");Serial.println(currentState);
+  Serial.print("current state: ");Serial.print(currentState);
   Serial.print("current color: ");Serial.println(currentColor);
   
-  delay(100); return;
+  //delay(100); return;
 
   updateState();
   
@@ -188,10 +195,13 @@ void delayWhileColorNotDetected(int delayMillis) {
 * COLOR DETECTION
 */
 
+// Accomplishes two things: pick a value for the BLUE_PWM so that the red and blue values
+// are roughly equal on black. Also, fills the color sense buffer with BLACK to initialize it.
 void calibrateColorSensing() {
    BLUE_PWM = 0;
-   int redVal = getRedLedValue(false);
+
    int blueVal = getBlueLedValue(false);
+   int redVal = getRedLedValue(false);
    int difference = abs(redVal) - abs(blueVal);
    
    COLOR_PRINT("initial diff:"); COLOR_PRINTLN(difference);
@@ -205,20 +215,13 @@ void calibrateColorSensing() {
      COLOR_PRINT("blue pwm:");COLOR_PRINTLN(BLUE_PWM);
      COLOR_PRINT("diff:");COLOR_PRINTLN(difference);
      COLOR_PRINTLN();
-     delay(100);
+     delayMicroseconds(50000); //delay(100);
    }
    
-   // no matter the difference we want red to be higher than blue (see how detectColor works for why)
-   if (redVal > blueVal) {
-     BLUE_PWM--;
-     difference = abs(redVal) - abs(blueVal);
-   }
-   
-   // TODO: Potentially set color detection threshold based on the difference?
    COLOR_PRINT("FINAL blue pwm:");COLOR_PRINTLN(BLUE_PWM);
    COLOR_PRINT("FINAL diff:");COLOR_PRINTLN(difference);
    
-   // try moving average
+   // Fill the moving average buffer with all BLACK - since that's what we start on.
    for (int i = 0; i < COLOR_BUFFER_SIZE; i++) {
      colorBuffer[i] = BLACK;
    }
@@ -226,35 +229,30 @@ void calibrateColorSensing() {
    colorBufferIndex = 0;
 }
 
-
 void colorSensorISR() {
-  currentColor = detectColor(COLOR_DETECTION_DELTA);
+  currentColor = detectColor();
 }
-  
-color_t detectColor(int threshold) {
+
+
+// Update the color buffer. Pick the color that has appeared the most in the buffe
+color_t detectColor() {
   int red = getRedLedValue(true);
   int blue = getBlueLedValue(true);
   digitalWrite(RED_LED_PIN, LOW);
   analogWrite(BLUE_LED_PIN, 0); // disable both leds so that the color sensor is not affected in between reads.
-  //COLOR_PRINT("red:");COLOR_PRINTLN(red);
-  //COLOR_PRINT("blue:");COLOR_PRINTLN(blue);
+  COLOR_PRINT("red:");COLOR_PRINT(red);
+  COLOR_PRINT("blue:");COLOR_PRINTLN(blue);
   
   color_t color = BLACK;
   
-  if ((red - blue) > threshold) {
-    //COLOR_PRINTLN("red");
+  if ((red - COLOR_DETECTION_DELTA) > RED_BASE) {
     color = RED;
-    //return RED;
   }
-  else if ((blue - red) > threshold){
-     //COLOR_PRINTLN("blue");
+  else if ((blue - COLOR_DETECTION_DELTA) > BLUE_BASE){
      color = BLUE;
-     //return BLUE;
   }
-  //COLOR_PRINTLN("black");
-  //return BLACK;
   
-    // try using a moving average buffer
+  // Update the buffer with the color we have detected.
   color_t oldColor = colorBuffer[colorBufferIndex];
   colorBuffer[colorBufferIndex] = color;
   colorBufferIndex = (colorBufferIndex + 1) % COLOR_BUFFER_SIZE;
@@ -275,7 +273,7 @@ color_t detectColor(int threshold) {
   }
   
   // Too many consecutive print statements don't let the interrupt finish in enough time.
-  // Don't uncomment all of them.
+  // Don't uncomment all of them or the program will lock up.
     //COLOR_PRINT("numReds:");COLOR_PRINTLN(numReds);
   //COLOR_PRINT("numBlues:");COLOR_PRINTLN(numBlues);
   //COLOR_PRINT("numBlacks:");COLOR_PRINTLN(numBlacks);
