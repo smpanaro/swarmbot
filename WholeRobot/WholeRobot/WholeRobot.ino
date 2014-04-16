@@ -25,9 +25,9 @@
 
 // Collision Pins/State
 #define BUMPER_DEBOUNCE_MILLIS 500
-int lastBumperTriggerMillis = 0;
-int bumperPressPending = false;
-bumper_t pendingBumper = NONE;
+volatile unsigned long lastBumperTriggerMillis = 0;
+volatile int bumperPressPending = false;
+volatile bumper_t pendingBumper = NONE;
 
 // Color Detection
 // THE ONLY Constants you should need to tweak are the base values.
@@ -99,13 +99,19 @@ void setup(){
 void loop(){
   Serial.print("current state: ");Serial.print(currentState);
   Serial.print("current color: ");Serial.println(currentColor);
-
+  
+//  if (bumperPressPending) {
+//    Serial.print("bumped: ");Serial.println(pendingBumper);
+//    bumperPressPending = false;
+//    pendingBumper = NONE;
+//  }
   updateState();
   
   switch(currentState){
     case START_STATE: handleStartState(); break;
     case LINE_FOLLOW_STATE: handleLineFollowState(); break;
     case LINE_SEARCH_STATE: handleLineSearchState(); break;
+    case FIRST_BUMP_STATE: handleFirstBumpState(); break;
     default: break;
   }
   
@@ -117,10 +123,14 @@ void loop(){
 */
 
 void updateState() {
-  if (currentState == START_STATE && currentColor != BLACK) {
+  if (currentState == START_STATE && bumperPressPending) {
+    lastState = currentState;
+    currentState = FIRST_BUMP_STATE;
+  } 
+  else if (currentState == FIRST_BUMP_STATE && currentColor != BLACK) {
     lastState = currentState;
     currentState = LINE_FOLLOW_STATE;
-  } 
+  }
   else if (currentState == LINE_FOLLOW_STATE && currentColor == BLACK) {
     lastState = currentState;
     currentState = LINE_SEARCH_STATE;
@@ -129,6 +139,7 @@ void updateState() {
     lastState = currentState;
     currentState = LINE_FOLLOW_STATE;
   }
+  
 }
 
 void handleStartState() {
@@ -136,8 +147,24 @@ void handleStartState() {
   delay(100);
 }
 
-void handleLineFollowState() {
+void handleFirstBumpState() {
   if (lastState == START_STATE) {
+    Serial.print("bumped tho");
+    // Backup from the wall a little.
+    reverse(FORWARD_SPEED);delay(50);
+    stop(); delay(100);
+    
+    turn('r', 180);
+    
+    forward(FORWARD_SPEED); delay(100);
+    lastState = FIRST_BUMP_STATE;
+    bumperPressPending = false;
+    pendingBumper = NONE;
+  }
+}
+
+void handleLineFollowState() {
+  if (lastState == FIRST_BUMP_STATE) {
     //TODO: We might overshoot here. Might need to shuffle ourselves to be on the line.
     stop(); delay(100);
     turn('r', 70);
@@ -309,7 +336,7 @@ int getBlueLedValue(boolean inISR) {
 */
 
 void frontBumperISR() {
-  int now = millis();
+  unsigned long now = millis();
   if ((now - lastBumperTriggerMillis) < BUMPER_DEBOUNCE_MILLIS) return;
   lastBumperTriggerMillis = now;
   bumperPressPending = true;
@@ -317,7 +344,7 @@ void frontBumperISR() {
 }
 
 void rightBumperISR() {
-  int now = millis();
+  unsigned long now = millis();
   if ((now - lastBumperTriggerMillis) < BUMPER_DEBOUNCE_MILLIS) return;
   lastBumperTriggerMillis = now;
   bumperPressPending = true;
@@ -325,7 +352,7 @@ void rightBumperISR() {
 }
 
 void leftBumperISR() {
-  int now = millis();
+  unsigned long now = millis();
   if ((now - lastBumperTriggerMillis) < BUMPER_DEBOUNCE_MILLIS) return;
   lastBumperTriggerMillis = now;
   bumperPressPending = true;
@@ -333,7 +360,7 @@ void leftBumperISR() {
 }
 
 void backBumperISR() {
-  int now = millis();
+  unsigned long now = millis();
   if ((now - lastBumperTriggerMillis) < BUMPER_DEBOUNCE_MILLIS) return;
   lastBumperTriggerMillis = now;
   bumperPressPending = true;
