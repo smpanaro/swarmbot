@@ -51,6 +51,10 @@ volatile color_t currentColor = BLACK; // volatile since this is updated in an I
 state_t currentState = START_STATE;
 state_t lastState = (state_t)NULL;
 
+// Line searching
+unsigned long currentSearchStateEndMillis = 0;
+search_state_t nextSearchState = START;
+
 // Configuration
 const int FORWARD_SPEED = 70;
 const int SEARCH_FORWARD_SPEED = 60;
@@ -98,13 +102,9 @@ void setup(){
 
 void loop(){
   Serial.print("current state: ");Serial.print(currentState);
-  Serial.print("current color: ");Serial.println(currentColor);
-  
-//  if (bumperPressPending) {
-//    Serial.print("bumped: ");Serial.println(pendingBumper);
-//    bumperPressPending = false;
-//    pendingBumper = NONE;
-//  }
+  Serial.print(" current color: ");Serial.print(currentColor);
+  Serial.print(" search state: ");Serial.println(((int)nextSearchState)-1); 
+
   updateState();
   
   switch(currentState){
@@ -134,6 +134,7 @@ void updateState() {
   else if (currentState == LINE_FOLLOW_STATE && currentColor == BLACK) {
     lastState = currentState;
     currentState = LINE_SEARCH_STATE;
+    nextSearchState = START;
   }
   else if (currentState == LINE_SEARCH_STATE &&  currentColor != BLACK) {
     lastState = currentState;
@@ -149,7 +150,6 @@ void handleStartState() {
 
 void handleFirstBumpState() {
   if (lastState == START_STATE) {
-    Serial.print("bumped tho");
     // Backup from the wall a little.
     reverse(FORWARD_SPEED);delay(50);
     stop(); delay(100);
@@ -179,36 +179,49 @@ void handleLineFollowState() {
 }
 
 void handleLineSearchState() {
-  stop();
-  delay(100);
+  if (currentColor != BLACK) {
+    // No need to explicitly course correct because our color sensor doesn't immediately update.
+    // We've likely rotated the extra amount we need anyways.
+    stop(); delay(100);
+    return;
+  }
   
   int angle = 90;
+  boolean shouldAdvanceStates = (millis() > currentSearchStateEndMillis);
   
-  // Step 1 - Turn left angle degrees, stopping if we see color.
-  left(TURN_SPEED);
-  delayWhileColorNotDetected(MILLIS_TO_TURN_90*(float(angle)/90.0));
-  stop(); delay(100);
-  
-  if (currentColor != BLACK) {
-    // Back on track, so course correct a tiny bit -- the path isn't perfectly straight.
-    turn('l', 5);
-    return;
+  // WARNING: The inclusion shouldAdvanceState in the below if statement is UNTESTED.
+  if (shouldAdvanceStates && nextSearchState == START) {
+    stop();
+    delay(100);
+    nextSearchState = PIVOT_LEFT;
   }
-  
-  // Step 2 - If no color so far, turn right 2*angle degrees. Again stop if we see color.
-  right(TURN_SPEED);
-  delayWhileColorNotDetected(MILLIS_TO_TURN_90*(float(2*angle)/90.0));
-  stop(); delay(100);
-  
-  if (currentColor != BLACK) {
-    // Back on track, so course correct a tiny bit -- the path isn't perfectly straight.
-    turn('r', 5);
-    return;
+  else if (nextSearchState == PIVOT_LEFT) {
+    // Step 1 - Turn left angle degrees, stopping if we see color.
+    left(TURN_SPEED);
+    nextSearchState = PIVOT_RIGHT;
+    currentSearchStateEndMillis = millis() + (MILLIS_TO_TURN_90*(float(angle)/90.0));
   }
-  
-  // If we still can't find it, back up a bit (towards the line) and we'll try again on the next loop.
-  reverse(SEARCH_FORWARD_SPEED); delay(200);
-  stop(); delay(100);
+  else if (shouldAdvanceStates && nextSearchState == PIVOT_RIGHT ) {
+    stop(); delay(100);
+    // Step 2 - If no color so far, turn right 2*angle degrees. Again stop if we see color.
+    right(TURN_SPEED);
+    nextSearchState = PIVOT_TO_ORIG_POS;
+    currentSearchStateEndMillis = millis() + (MILLIS_TO_TURN_90*(float(2*angle)/90.0));
+  }
+  else if (shouldAdvanceStates && nextSearchState == PIVOT_TO_ORIG_POS) {
+    stop(); delay(100);
+    // Step 3 - Pivot left angle degrees to our original position, so that we can reverse for the next try.
+    left(TURN_SPEED);
+    nextSearchState = REVERSE;
+    currentSearchStateEndMillis = millis() + (MILLIS_TO_TURN_90*(float(angle)/90.0));
+  }
+  else if (shouldAdvanceStates && nextSearchState == REVERSE) {
+    stop(); delay(100);
+    // Step 4 - If we still can't find it, back up a bit (towards the line) and we'll try again on the next loop.
+    reverse(SEARCH_FORWARD_SPEED);
+    nextSearchState = START;
+    currentSearchStateEndMillis = millis() + 200;
+  }
 }
 
 // Delay for delayMillis or until a color is detected.
@@ -217,6 +230,24 @@ void delayWhileColorNotDetected(unsigned long delayMillis) {
   while (millis() < endTime) {
     if (currentColor != BLACK) break;
   } 
+}
+
+// Delay for delayMillis unless a bumper is pressed. Return whether a bumper was pressed.
+boolean bumperPressedWhileDelaying(unsigned long delayMillis) {
+  unsigned long endTime = millis() + delayMillis;
+  while (millis() < endTime) {
+    if (bumperPressPending) return true;
+  } 
+  return false;
+}
+
+boolean delayUnlessBumperOrColor(unsigned long delayMillis) {
+    unsigned long endTime = millis() + delayMillis;
+  while (millis() < endTime) {
+    if (bumperPressPending) return true;
+    if (currentColor != BLACK) break;
+  } 
+  return false;
 }
 
 /*
