@@ -18,6 +18,7 @@
 #define M1_LOW_PIN 8
 #define M2_HIGH_PIN 9
 #define M2_LOW_PIN 10
+motor_state_t currentMotorState = STOP;
 
 // Comm Pins
 #define CARRIER_PIN 5 // carrier only comes out on 5! do not change!
@@ -74,7 +75,6 @@ void setup(){
    pinMode(M2_HIGH_PIN, OUTPUT);
    pinMode(M2_LOW_PIN, OUTPUT);
   
-   
    // Setup Clock for Carrier Frequency
    // see IR sketch for register explanations
    pinMode(5, OUTPUT);
@@ -153,11 +153,11 @@ void handleFirstBumpState() {
   if (lastState == START_STATE) {
     // Backup from the wall a little.
     reverse(FORWARD_SPEED);delay(50);
-    stop(); delay(100);
+    stop();
     
     turn('r', 180);
     
-    forward(FORWARD_SPEED); delay(100);
+    forward(FORWARD_SPEED);
     lastState = FIRST_BUMP_STATE;
     bumperPressPending = false;
     pendingBumper = NONE;
@@ -167,7 +167,7 @@ void handleFirstBumpState() {
 void handleLineFollowState() {
   if (lastState == FIRST_BUMP_STATE) {
     //TODO: We might overshoot here. Might need to shuffle ourselves to be on the line.
-    stop(); delay(100);
+    stop();
     turn('r', 70);
   }
   
@@ -175,7 +175,6 @@ void handleLineFollowState() {
     // Clear last state. No need to go forward and delay if we're already moving.
     lastState = LINE_FOLLOW_STATE;
     forward(SEARCH_FORWARD_SPEED);
-    delay(100);  
   }
 }
 
@@ -183,7 +182,7 @@ void handleLineSearchState() {
   if (currentColor != BLACK) {
     // No need to explicitly course correct because our color sensor doesn't immediately update.
     // We've likely rotated the extra amount we need anyways.
-    stop(); delay(100);
+    stop();
     return;
   }
   
@@ -193,7 +192,6 @@ void handleLineSearchState() {
   // WARNING: The inclusion shouldAdvanceState in the below if statement is UNTESTED.
   if (shouldAdvanceStates && nextSearchState == START) {
     stop();
-    delay(100);
     nextSearchState = PIVOT_LEFT;
   }
   else if (nextSearchState == PIVOT_LEFT) {
@@ -203,52 +201,23 @@ void handleLineSearchState() {
     currentSearchStateEndMillis = millis() + (MILLIS_TO_TURN_90*(float(angle)/90.0));
   }
   else if (shouldAdvanceStates && nextSearchState == PIVOT_RIGHT ) {
-    stop(); delay(100);
     // Step 2 - If no color so far, turn right 2*angle degrees. Again stop if we see color.
     right(TURN_SPEED);
     nextSearchState = PIVOT_TO_ORIG_POS;
     currentSearchStateEndMillis = millis() + (MILLIS_TO_TURN_90*(float(2*angle)/90.0));
   }
   else if (shouldAdvanceStates && nextSearchState == PIVOT_TO_ORIG_POS) {
-    stop(); delay(100);
     // Step 3 - Pivot left angle degrees to our original position, so that we can reverse for the next try.
     left(TURN_SPEED);
     nextSearchState = REVERSE;
     currentSearchStateEndMillis = millis() + (MILLIS_TO_TURN_90*(float(angle)/90.0));
   }
   else if (shouldAdvanceStates && nextSearchState == REVERSE) {
-    stop(); delay(100);
     // Step 4 - If we still can't find it, back up a bit (towards the line) and we'll try again on the next loop.
     reverse(SEARCH_FORWARD_SPEED);
     nextSearchState = START;
     currentSearchStateEndMillis = millis() + 200;
   }
-}
-
-// Delay for delayMillis or until a color is detected.
-void delayWhileColorNotDetected(unsigned long delayMillis) {
-  unsigned long endTime = millis() + delayMillis;
-  while (millis() < endTime) {
-    if (currentColor != BLACK) break;
-  } 
-}
-
-// Delay for delayMillis unless a bumper is pressed. Return whether a bumper was pressed.
-boolean bumperPressedWhileDelaying(unsigned long delayMillis) {
-  unsigned long endTime = millis() + delayMillis;
-  while (millis() < endTime) {
-    if (bumperPressPending) return true;
-  } 
-  return false;
-}
-
-boolean delayUnlessBumperOrColor(unsigned long delayMillis) {
-    unsigned long endTime = millis() + delayMillis;
-  while (millis() < endTime) {
-    if (bumperPressPending) return true;
-    if (currentColor != BLACK) break;
-  } 
-  return false;
 }
 
 /*
@@ -403,22 +372,25 @@ void backBumperISR() {
 * MOTOR CONTROL
 */
 
-void forward(int speed) {
-  forward(M1_HIGH_PIN, M1_LOW_PIN, M2_HIGH_PIN, M2_LOW_PIN, speed);
+void prepareForNewState(motor_state_t newState) {
+  // No need if we are not actually changing state or if we are stopping.
+  if (newState != STOP || currentState != newState) {
+    stop(false); 
+    delay(100); // delay so that we don't rapidly change polarity on the motors.
+    currentState = newState;
+  }
 }
-
-void forward(int m1_high, int m1_low, int m2_high, int m2_low, int speed) {
-  setHighPin(m1_high, m1_low, speed);
-  setLowPin(m2_high, m2_low, speed);
+  
+void forward(int speed) {
+  prepareForNewState(FORWARD);
+  setHighPin(M1_HIGH_PIN, M1_LOW_PIN, speed);
+  setLowPin(M2_HIGH_PIN, M2_LOW_PIN, speed);
 }
 
 void reverse(int speed) {
-  reverse(M1_HIGH_PIN, M1_LOW_PIN, M2_HIGH_PIN, M2_LOW_PIN, speed);
-}
-
-void reverse(int m1_high, int m1_low, int m2_high, int m2_low, int speed) {
-  setLowPin(m1_high, m1_low, speed);
-  setHighPin(m2_high, m2_low, speed);
+  prepareForNewState(REVERSE);
+  setLowPin(M1_HIGH_PIN, M1_LOW_PIN, speed);
+  setHighPin(M2_HIGH_PIN, M2_LOW_PIN, speed);
 }
 
 void left(int speed) {
@@ -426,16 +398,16 @@ void left(int speed) {
 }
 
 void left(int m1_high, int m1_low, int m2_high, int m2_low, int speed) {
-  setHighPin(m1_high, m1_low, speed);
-  setHighPin(m2_high, m2_low, speed);
+  setHighPin(M1_HIGH_PIN, M1_LOW_PIN, speed);
+  setHighPin(M2_HIGH_PIN, M2_LOW_PIN, speed);
 }
 void right(int speed) {
   right(M1_HIGH_PIN, M1_LOW_PIN, M2_HIGH_PIN, M2_LOW_PIN, speed);
 }
 
 void right(int m1_high, int m1_low, int m2_high, int m2_low, int speed) {
-  setLowPin(m1_high, m1_low, speed);
-  setLowPin(m2_high, m2_low, speed);
+  setLowPin(M1_HIGH_PIN, M1_LOW_PIN, speed);
+  setLowPin(M2_HIGH_PIN, M2_LOW_PIN, speed);
 }
 
 void turn(char dir, int angle){
@@ -443,30 +415,31 @@ void turn(char dir, int angle){
     left(TURN_SPEED);
     delay(MILLIS_TO_TURN_90*(float(angle)/90.0));
     stop();
-    delay(200);
   }
   else if(dir == 'r'){
     right(TURN_SPEED);
     delay(MILLIS_TO_TURN_90*(float(angle)/90.0));
     stop();
-    delay(200);
   }
 }
 
-
-
+// Stop is overloaded so that we can call it when we want to enter the
+// STOP state but also when we want to stop before a transition 
+// e.g. stopping when going from forward() to reverse().
 void stop() {
-  stop(M1_HIGH_PIN, M1_LOW_PIN, M2_HIGH_PIN, M2_LOW_PIN);
+  stop(true);
 }
 
-void stop(int m1_high, int m1_low, int m2_high, int m2_low) {
-  digitalWrite(m1_high, LOW);
-  digitalWrite(m2_high, LOW);
-  digitalWrite(m1_low, LOW);
-  digitalWrite(m2_low, LOW);
+void stop(boolean isNextState) {
+  if (isNextState) prepareForNewState(STOP);
+  
+  digitalWrite(M1_HIGH_PIN, LOW);
+  digitalWrite(M2_HIGH_PIN, LOW);
+  digitalWrite(M1_LOW_PIN, LOW);
+  digitalWrite(M2_LOW_PIN, LOW);
 }
   
-
+// Set the high pin to speed and the other pin off.
 void setHighPin(int high_pin, int low_pin, int speed) {
   if (speed > 255) speed = 255;
   
