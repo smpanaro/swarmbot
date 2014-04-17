@@ -13,10 +13,11 @@
 
 // Motor Pins
 // all need to be on analogWrite-able pins. (2 - 13 and 44 - 46)
-#define M1_HIGH_PIN 6
-#define M1_LOW_PIN 4
-#define M2_HIGH_PIN 7
-#define M2_LOW_PIN 8
+// M1 is the right wheel. M2, the left.
+#define M1_HIGH_PIN 7
+#define M1_LOW_PIN 8
+#define M2_HIGH_PIN 9
+#define M2_LOW_PIN 10
 
 // Comm Pins
 #define CARRIER_PIN 5 // carrier only comes out on 5! do not change!
@@ -33,12 +34,12 @@ volatile bumper_t pendingBumper = NONE;
 // THE ONLY Constants you should need to tweak are the base values.
 // (Turn on color printing to see the typical red and blue values to set the bases to.)
 // For whatever reason the first few reads are ~100 higher than all other reads.
-#define RED_LED_PIN 31
-#define BLUE_LED_PIN 45 // needs to be on one of the analogWrite-able pins.
+#define RED_LED_PIN 3
+#define BLUE_LED_PIN 4 // needs to be on one of the analogWrite-able pins.
 #define COLOR_SENSOR_PIN A0
 #define COLOR_BUFFER_SIZE 10 // higher numbers dampen noise, lower numbers allow for quicker switching time
 volatile int numReds = 0;
-volatile int numBlacks = COLOR_BUFFER_SIZE;
+volatile int numBlacks = COLOR_BUFFER_SIZE; // Buffer is initialized to all black.
 volatile int numBlues = 0;
 volatile int colorBufferIndex = 0;
 volatile color_t colorBuffer[COLOR_BUFFER_SIZE]; // dynamically filled in colorCalibration function;
@@ -47,7 +48,7 @@ volatile int RED_BASE = 450;
 volatile int BLUE_BASE = 450;
 
 // State 
-volatile color_t currentColor = BLACK; // volatile since this is updated in an ISR
+volatile color_t currentColor = BLACK;
 state_t currentState = START_STATE;
 state_t lastState = (state_t)NULL;
 
@@ -61,7 +62,7 @@ const int SEARCH_FORWARD_SPEED = 60;
 const int TURN_SPEED = 70;
 const int MILLIS_TO_TURN_90 = 500;
 
-const int COLOR_DETECTION_DELTA = 70;
+const int COLOR_DETECTION_DELTA = 70; // Difference from base value to indicate a color's presence.
 
 void setup(){
    
@@ -83,10 +84,10 @@ void setup(){
    digitalWrite(5, HIGH); // turn on the carrier
    
    // Collision
-   attachInterrupt(2, frontBumperISR, RISING); // pin 21
+   attachInterrupt(2, backBumperISR, RISING); // pin 21
    attachInterrupt(3, leftBumperISR, RISING);  // pin 20
    attachInterrupt(4, rightBumperISR, RISING); // pin 19
-   attachInterrupt(5, backBumperISR, RISING);  // pin 18
+   attachInterrupt(5, frontBumperISR, RISING);  // pin 18
    lastBumperTriggerMillis = millis();
    
    // Color Pins
@@ -103,7 +104,7 @@ void setup(){
 void loop(){
   Serial.print("current state: ");Serial.print(currentState);
   Serial.print(" current color: ");Serial.print(currentColor);
-  Serial.print(" search state: ");Serial.println(((int)nextSearchState)-1); 
+  Serial.print(" search state: ");Serial.println(((int)nextSearchState)-1);
 
   updateState();
   
