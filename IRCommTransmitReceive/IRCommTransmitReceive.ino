@@ -4,17 +4,17 @@
 int state = 0;
 int inPin = 30;
 int outPin = 31;
-int dataFreq = 600; //Hz
 unsigned int dataDelayMicros = 1667; //1/dataFreq (converted to micro seconds)
 
 int RED_COLOR = 0;
 int BLUE_COLOR = 1;
 int currentColor = BLUE_COLOR;
 
-const int BAD = 666;
+const int RETRANSMIT = 12345;
+const int BAD = 666; // garbled message - not an actual message that can be sent
 const int GOOD = 420;
-const int redFound = 555;
-const int blueFound = 333;
+const int RED_FOUND = 555;
+const int BLUE_FOUND = 333;
 const int DONE = 111;
 
 int messageTime = 5000; //milliseconds
@@ -51,8 +51,8 @@ void beSlave()
    
    while(message == BAD)
    {
-    Serial.println("sending BAD");
-    sendMessage(BAD);
+    Serial.println("sending RETRANSMIT");
+    sendMessage(RETRANSMIT);
     Serial.println("ready to receive again");
     message = receiveMessage(); 
    }   
@@ -75,13 +75,15 @@ void colorFound(int n)
     Serial.println("i am the master");
     pingHandler();
     delay(500);
-    sendMessage(n);
+    int msg;
+    if (n == BLUE_COLOR) msg = BLUE_FOUND;
+    else msg = RED_FOUND;
+    sendMessage(msg);
 
     while(receiveMessage() == BAD)
     {
       Serial.println("uh oh BAD message, sending again");
-      if (n == BLUE_COLOR) sendMessage( blueFound);
-      else sendMessage(redFound);
+      sendMessage(msg);
     }
     lightLED();
     
@@ -111,10 +113,10 @@ int receiveMessage()
 int decodeMessage(int numOnes)
 {
    if((numOnes<100)&&(numOnes>25)) return GOOD;
-   else if((numOnes<200)&&(numOnes>125)) return BAD; //this case is when the master receives a message from
+   else if((numOnes<200)&&(numOnes>125)) return RETRANSMIT; //this case is when the master receives a message from
                                                      //the slave saying "I received a bad message"
-   else if((numOnes<300)&&(numOnes>225)) return redFound;
-   else if((numOnes<400)&&(numOnes>325)) return blueFound;
+   else if((numOnes<300)&&(numOnes>225)) return RED_FOUND;
+   else if((numOnes<400)&&(numOnes>325)) return BLUE_FOUND;
    else if((numOnes<500)&&(numOnes>425)) return DONE;
    return BAD; //this is when the slave receives a message it can not decode, i.e. it is bad. 
 }
@@ -146,15 +148,15 @@ void sendMessage(int n)
      numOnes = 50;
      break;
      
-   case BAD:
+   case RETRANSMIT:
      numOnes = 150;
      break;
    
-   case redFound:
+   case RED_FOUND:
      numOnes = 250;
      break;
    
-   case blueFound:
+   case BLUE_FOUND:
      numOnes = 350;
      break;
     
