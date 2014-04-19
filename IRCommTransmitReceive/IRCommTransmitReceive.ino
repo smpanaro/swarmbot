@@ -17,6 +17,15 @@ const int RED_FOUND = 555;
 const int BLUE_FOUND = 333;
 const int DONE = 111;
 
+// Configure the relationship between message and number of ones.
+const int MESSAGE_DIFFERENCE = 100; // The number of 1s between two consecutive message definitions.
+const int MESSAGE_DETECTION_DELTA = 25; // The value to accept +/- the true value of the message. Should be less than 0.5*MESSAGE_DIFFERENCE
+const int goodNumOnes = MESSAGE_DIFFERENCE*(0.5);
+const int retransmitNumOnes = MESSAGE_DIFFERENCE*(1.5);
+const int redFoundNumOnes = MESSAGE_DIFFERENCE*(2.5);
+const int blueFoundNumOnes = MESSAGE_DIFFERENCE*(3.5);
+const int doneNumOnes = MESSAGE_DIFFERENCE*(4.5);
+
 int messageTime = 5000; //milliseconds
 
 void setup()
@@ -112,13 +121,18 @@ int receiveMessage()
 
 int decodeMessage(int numOnes)
 {
-   if((numOnes<100)&&(numOnes>25)) return GOOD;
-   else if((numOnes<200)&&(numOnes>125)) return RETRANSMIT; //this case is when the master receives a message from
-                                                     //the slave saying "I received a bad message"
-   else if((numOnes<300)&&(numOnes>225)) return RED_FOUND;
-   else if((numOnes<400)&&(numOnes>325)) return BLUE_FOUND;
-   else if((numOnes<500)&&(numOnes>425)) return DONE;
-   return BAD; //this is when the slave receives a message it can not decode, i.e. it is bad. 
+  if((numOnes < (goodNumOnes + MESSAGE_DETECTION_DELTA)) &&
+     (numOnes > (goodNumOnes - MESSAGE_DETECTION_DELTA))) return GOOD;
+  else if((numOnes < (retransmitNumOnes + MESSAGE_DETECTION_DELTA)) &&
+          (numOnes > (retransmitNumOnes - MESSAGE_DETECTION_DELTA))) return RETRANSMIT; //this case is when the master receives a message from
+                                                                                     //the slave saying "I received a bad message"
+  else if((numOnes < (redFoundNumOnes + MESSAGE_DETECTION_DELTA)) &&
+          (numOnes > (redFoundNumOnes - MESSAGE_DETECTION_DELTA))) return RED_FOUND;
+  else if((numOnes < (blueFoundNumOnes + MESSAGE_DETECTION_DELTA)) &&
+          (numOnes > (blueFoundNumOnes - MESSAGE_DETECTION_DELTA))) return BLUE_FOUND;
+  else if((numOnes < (doneNumOnes + MESSAGE_DETECTION_DELTA)) &&
+          (numOnes > (doneNumOnes - MESSAGE_DETECTION_DELTA))) return DONE;
+  return BAD; //this is when the slave receives a message it can not decode, i.e. it is bad. 
 }
 
 
@@ -145,23 +159,19 @@ void sendMessage(int n)
   switch(n)
   {
    case GOOD:
-     numOnes = 50;
+     numOnes = goodNumOnes;
      break;
-     
    case RETRANSMIT:
-     numOnes = 150;
+     numOnes = retransmitNumOnes;
      break;
-   
    case RED_FOUND:
-     numOnes = 250;
+     numOnes = redFoundNumOnes;
      break;
-   
    case BLUE_FOUND:
-     numOnes = 350;
+     numOnes = blueFoundNumOnes;
      break;
-    
    case DONE: 
-     numOnes = 450;
+     numOnes = doneNumOnes;
      break;
   }
   transmit(numOnes);  
