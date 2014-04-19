@@ -51,6 +51,7 @@ volatile int BLUE_BASE = 450;
 volatile color_t currentColor = BLACK;
 state_t currentState = START_STATE;
 state_t lastState = (state_t)NULL;
+boolean onReturnTrip = false;
 
 // Line searching
 unsigned long currentSearchStateEndMillis = 0;
@@ -113,6 +114,8 @@ void loop(){
     case LINE_FOLLOW_STATE: handleLineFollowState(); break;
     case LINE_SEARCH_STATE: handleLineSearchState(); break;
     case FIRST_BUMP_STATE: handleFirstBumpState(); break;
+    case SECOND_BUMP_STATE: handleSecondBumpState(); break;
+    case END_OF_LINE_STATE: handleEndOfLineState(); break;
     default: break;
   }
   
@@ -141,6 +144,19 @@ void updateState() {
     lastState = currentState;
     currentState = LINE_FOLLOW_STATE;
   }
+  else if ((currentState & (LINE_SEARCH_STATE|LINE_FOLLOW_STATE)) && bumperPressPending && pendingBumper == FRONT) {
+    lastState = currentState;
+    currentState = SECOND_BUMP_STATE;
+    onReturnTrip = true;
+  }
+  else if (currentState == SECOND_BUMP_STATE && currentColor == BLACK) {
+    lastState = currentState;
+    currentState = LINE_SEARCH_STATE;
+  }
+  else if (currentState == SECOND_BUMP_STATE && currentColor != BLACK) {
+    lastState = currentState;
+    currentState = LINE_FOLLOW_STATE;
+  }
   
 }
 
@@ -162,6 +178,25 @@ void handleFirstBumpState() {
     bumperPressPending = false;
     pendingBumper = NONE;
   }
+}
+
+void handleSecondBumpState() {
+  if (lastState & (LINE_SEARCH_STATE|LINE_FOLLOW_STATE)) {
+    // Backup from the wall a little.
+    reverse(FORWARD_SPEED);delay(50);
+    stop(); delay(100);
+
+    turn('r', 180);
+
+    forward(FORWARD_SPEED); delay(100);
+    lastState = SECOND_BUMP_STATE;
+    bumperPressPending = false;
+    pendingBumper = NONE;
+  }
+}
+
+void handleEndOfLineState() {
+  // Will need to transmit here eventually.
 }
 
 void handleLineFollowState() {
@@ -222,6 +257,12 @@ void handleLineSearchState() {
     reverse(SEARCH_FORWARD_SPEED);
     nextSearchState = START;
     currentSearchStateEndMillis = millis() + 200;
+  }
+  else if (onReturnTrip && shouldAdvanceStates && nextSearchState == START) {
+    // Step 5 - If we are on our return trip and we have swept 180 degress without finding color, we're probably done.
+    stop(); delay(100);
+    nextSearchState = START; // shouldn't matter
+    currentState = END_OF_LINE_STATE;
   }
 }
 
