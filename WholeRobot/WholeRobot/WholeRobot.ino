@@ -14,10 +14,11 @@
 // Motor Pins
 // all need to be on analogWrite-able pins. (2 - 13 and 44 - 46)
 // M1 is the right wheel. M2, the left.
-#define M1_HIGH_PIN 7
-#define M1_LOW_PIN 8
-#define M2_HIGH_PIN 9
-#define M2_LOW_PIN 10
+#define M1_HIGH_PIN 6
+#define M1_LOW_PIN 7
+#define M2_HIGH_PIN 8
+#define M2_LOW_PIN 9
+const float M1_DEFICIT = 0.967; // The percent of M2's power that M1 should get.
 
 // Comm Pins
 #define CARRIER_PIN 5 // carrier only comes out on 5! do not change!
@@ -60,8 +61,8 @@ search_state_t nextSearchState = START;
 // Configuration
 const int FORWARD_SPEED = 70;
 const int SEARCH_FORWARD_SPEED = 60;
-const int TURN_SPEED = 70;
-const int MILLIS_TO_TURN_90 = 500;
+const int TURN_SPEED = 60;
+const int MILLIS_TO_TURN_90 = 580;
 
 const int COLOR_DETECTION_DELTA = 70; // Difference from base value to indicate a color's presence.
 
@@ -107,6 +108,12 @@ void loop(){
   Serial.print(" current color: ");Serial.print(currentColor);
   Serial.print(" search state: ");Serial.println(((int)nextSearchState)-1);
 
+  /*calibrating turning
+  left(TURN_SPEED);
+  delay((MILLIS_TO_TURN_90*(float(90)/90.0)));
+  stop();
+  delay(100000);
+  */
   updateState();
   
   switch(currentState){
@@ -128,6 +135,7 @@ void loop(){
 
 void updateState() {
   if (currentState == START_STATE && bumperPressPending) {
+    Serial.println("BUMPED");
     lastState = currentState;
     currentState = FIRST_BUMP_STATE;
   } 
@@ -144,7 +152,7 @@ void updateState() {
     lastState = currentState;
     currentState = LINE_FOLLOW_STATE;
   }
-  else if ((currentState & (LINE_SEARCH_STATE|LINE_FOLLOW_STATE)) && bumperPressPending && pendingBumper == FRONT) {
+  else if ((currentState & (LINE_SEARCH_STATE|LINE_FOLLOW_STATE)) && bumperPressPending) {
     lastState = currentState;
     currentState = SECOND_BUMP_STATE;
     onReturnTrip = true;
@@ -168,10 +176,10 @@ void handleStartState() {
 void handleFirstBumpState() {
   if (lastState == START_STATE) {
     // Backup from the wall a little.
-    reverse(FORWARD_SPEED);delay(50);
+    reverse(FORWARD_SPEED);delay(750);
     stop(); delay(100);
     
-    turn('r', 180);
+    turn('r', 160);
     
     forward(FORWARD_SPEED); delay(100);
     lastState = FIRST_BUMP_STATE;
@@ -183,7 +191,7 @@ void handleFirstBumpState() {
 void handleSecondBumpState() {
   if (lastState & (LINE_SEARCH_STATE|LINE_FOLLOW_STATE)) {
     // Backup from the wall a little.
-    reverse(FORWARD_SPEED);delay(50);
+    reverse(FORWARD_SPEED);delay(500);
     stop(); delay(100);
 
     turn('r', 180);
@@ -203,7 +211,9 @@ void handleLineFollowState() {
   if (lastState == FIRST_BUMP_STATE) {
     //TODO: We might overshoot here. Might need to shuffle ourselves to be on the line.
     stop(); delay(100);
-    turn('r', 70);
+    
+    if (currentColor == BLUE) turn('l', 70);
+    else turn('r', 70);
   }
   
   if (lastState != LINE_FOLLOW_STATE) {
@@ -219,10 +229,19 @@ void handleLineSearchState() {
     // No need to explicitly course correct because our color sensor doesn't immediately update.
     // We've likely rotated the extra amount we need anyways.
     stop(); delay(100);
+    
+    if (nextSearchState == PIVOT_TO_ORIG_POS) { // We found color while turning right.
+      turn('r', 20);
+    }
+    else if (nextSearchState == PIVOT_RIGHT) { // We found color while turning left.
+      turn('l', 20);
+    }
+    else if (nextSearchState == START) {} // We found color while backing up.
+    
     return;
   }
   
-  int angle = 90;
+  int angle = 30;
   boolean shouldAdvanceStates = (millis() > currentSearchStateEndMillis);
   
   // WARNING: The inclusion shouldAdvanceState in the below if statement is UNTESTED.
@@ -256,7 +275,7 @@ void handleLineSearchState() {
     // Step 4 - If we still can't find it, back up a bit (towards the line) and we'll try again on the next loop.
     reverse(SEARCH_FORWARD_SPEED);
     nextSearchState = START;
-    currentSearchStateEndMillis = millis() + 200;
+    currentSearchStateEndMillis = millis() + 250;
   }
   else if (onReturnTrip && shouldAdvanceStates && nextSearchState == START) {
     // Step 5 - If we are on our return trip and we have swept 180 degress without finding color, we're probably done.
@@ -335,7 +354,7 @@ void colorSensorISR() {
 }
 
 
-// Update the color buffer. Pick the color that has appeared the most in the buffe
+// Update the color buffer. Pick the color that has appeared the most in the buffer.
 color_t detectColor() {
   int red = getRedLedValue(true);
   int blue = getBlueLedValue(true);
@@ -449,7 +468,7 @@ void forward(int speed) {
 }
 
 void forward(int m1_high, int m1_low, int m2_high, int m2_low, int speed) {
-  setHighPin(m1_high, m1_low, speed);
+  setHighPin(m1_high, m1_low, speed*M1_DEFICIT);
   setLowPin(m2_high, m2_low, speed);
 }
 
@@ -458,7 +477,7 @@ void reverse(int speed) {
 }
 
 void reverse(int m1_high, int m1_low, int m2_high, int m2_low, int speed) {
-  setLowPin(m1_high, m1_low, speed);
+  setLowPin(m1_high, m1_low, speed*M1_DEFICIT);
   setHighPin(m2_high, m2_low, speed);
 }
 
@@ -467,7 +486,7 @@ void left(int speed) {
 }
 
 void left(int m1_high, int m1_low, int m2_high, int m2_low, int speed) {
-  setHighPin(m1_high, m1_low, speed);
+  setHighPin(m1_high, m1_low, speed*M1_DEFICIT);
   setHighPin(m2_high, m2_low, speed);
 }
 void right(int speed) {
@@ -475,7 +494,7 @@ void right(int speed) {
 }
 
 void right(int m1_high, int m1_low, int m2_high, int m2_low, int speed) {
-  setLowPin(m1_high, m1_low, speed);
+  setLowPin(m1_high, m1_low, speed*M1_DEFICIT);
   setLowPin(m2_high, m2_low, speed);
 }
 
