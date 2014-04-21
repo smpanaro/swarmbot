@@ -248,16 +248,18 @@ void handleLineFollowState() {
 void handleLineSearchState() {
   stop(); delay(100);
   
-  //reverse(55);
-  //delayUntilColor();
-  
   unsigned long turnTime = 350;
+  unsigned long overshootTime = 150;
   
   left(60);
   delayWhileColorNotDetected(turnTime);
   stop(); delay(100);
   
   if (currentColor != BLACK) {
+    // fix overshoot
+    right(60);
+    delay(overshootTime);
+    stop(); delay(100);
     return;
   }
   
@@ -266,6 +268,9 @@ void handleLineSearchState() {
   stop(); delay(100);
   
   if (currentColor != BLACK) {
+    left(60);
+    delay(overshootTime);
+    stop(); delay(100);
     return;
   }
   
@@ -273,10 +278,19 @@ void handleLineSearchState() {
   delay(turnTime);
   stop(); delay(100);
   
-  reverse(60); delay(200);
-  stop(); delay(100);
+  if (!onReturnTrip) {
+    reverse(60); delay(200);
+    stop(); delay(100);
+  }
   
-  if (onReturnTrip) currentState = END_OF_LINE_STATE;
+  if (onReturnTrip){
+    reverse(60);
+    delayWhileColorNotDetected(500); // 500 is max time to back up.
+    stop(); delay(100);
+    forward(60); delay(overshootTime);
+    stop(); delay(100);
+    currentState = END_OF_LINE_STATE;
+  }
   
 }
 
