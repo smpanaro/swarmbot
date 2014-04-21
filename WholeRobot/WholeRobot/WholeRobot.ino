@@ -18,7 +18,7 @@
 #define M1_LOW_PIN 7
 #define M2_HIGH_PIN 8
 #define M2_LOW_PIN 9
-const float M1_DEFICIT = 0.967; // The percent of M2's power that M1 should get.
+const float M1_DEFICIT = 0.9552; // The percent of M2's power that M1 should get.
 
 // Comm Pins
 #define CARRIER_PIN 5 // carrier only comes out on 5! do not change!
@@ -45,8 +45,8 @@ volatile int numBlues = 0;
 volatile int colorBufferIndex = 0;
 volatile color_t colorBuffer[COLOR_BUFFER_SIZE]; // dynamically filled in colorCalibration function;
 int BLUE_PWM = 0; // Brightness of the blue LED
-volatile int RED_BASE = 450;
-volatile int BLUE_BASE = 450;
+volatile int RED_BASE = 266;
+volatile int BLUE_BASE = 200;
 
 // State 
 volatile color_t currentColor = BLACK;
@@ -62,7 +62,7 @@ search_state_t nextSearchState = START;
 const int FORWARD_SPEED = 70;
 const int SEARCH_FORWARD_SPEED = 60;
 const int TURN_SPEED = 60;
-const int MILLIS_TO_TURN_90 = 580;
+const int MILLIS_TO_TURN_90 = 500;
 
 const int COLOR_DETECTION_DELTA = 70; // Difference from base value to indicate a color's presence.
 
@@ -176,12 +176,14 @@ void handleStartState() {
 void handleFirstBumpState() {
   if (lastState == START_STATE) {
     // Backup from the wall a little.
-    reverse(FORWARD_SPEED);delay(750);
+    reverse(FORWARD_SPEED);delay(350);
     stop(); delay(100);
     
     turn('r', 160);
+//    right(TURN_SPEED);
+//    delayWhileColorNotDetected(MILLIS_TO_TURN_90*(float(180)/90.0));
     
-    forward(FORWARD_SPEED); delay(100);
+    forward(FORWARD_SPEED); delay(100); //100 with full batteries
     lastState = FIRST_BUMP_STATE;
     bumperPressPending = false;
     pendingBumper = NONE;
@@ -194,7 +196,11 @@ void handleSecondBumpState() {
     reverse(FORWARD_SPEED);delay(500);
     stop(); delay(100);
 
-    turn('r', 180);
+//    turn('r', 180);
+    right(TURN_SPEED);
+    delay(MILLIS_TO_TURN_90*(float(180)/90.0)); // turn at leat 180
+    delayWhileColorNotDetected(MILLIS_TO_TURN_90*(float(90)/90.0)); // then keep going until there's color
+    
 
     forward(FORWARD_SPEED); delay(100);
     lastState = SECOND_BUMP_STATE;
@@ -205,15 +211,19 @@ void handleSecondBumpState() {
 
 void handleEndOfLineState() {
   // Will need to transmit here eventually.
+  stop(); delay(100);
 }
 
 void handleLineFollowState() {
   if (lastState == FIRST_BUMP_STATE) {
     //TODO: We might overshoot here. Might need to shuffle ourselves to be on the line.
+    forward(FORWARD_SPEED); delay(500); // This is to compensate for the light sensor being way ahead of the bot.
     stop(); delay(100);
     
-    if (currentColor == BLUE) turn('l', 70);
-    else turn('r', 70);
+//    if (currentColor == BLUE) left(TURN_SPEED); //turn('l', 70);
+//    else right(TURN_SPEED); //turn('r', 70);
+    left(TURN_SPEED);
+    delayWhileColorNotDetected(MILLIS_TO_TURN_90*(float(90)/90.0));
   }
   
   if (lastState != LINE_FOLLOW_STATE) {
@@ -231,10 +241,10 @@ void handleLineSearchState() {
     stop(); delay(100);
     
     if (nextSearchState == PIVOT_TO_ORIG_POS) { // We found color while turning right.
-      turn('r', 20);
+      turn('r', 10);
     }
     else if (nextSearchState == PIVOT_RIGHT) { // We found color while turning left.
-      turn('l', 20);
+      turn('l', 10);
     }
     else if (nextSearchState == START) {} // We found color while backing up.
     
@@ -275,7 +285,12 @@ void handleLineSearchState() {
     // Step 4 - If we still can't find it, back up a bit (towards the line) and we'll try again on the next loop.
     reverse(SEARCH_FORWARD_SPEED);
     nextSearchState = START;
-    currentSearchStateEndMillis = millis() + 250;
+    
+    
+    // ALL THE HACKS - srsly, this needs to be removed. and the states below need to start working correctly.
+    currentState = END_OF_LINE_STATE;
+    
+    currentSearchStateEndMillis = millis() + 500;
   }
   else if (onReturnTrip && shouldAdvanceStates && nextSearchState == START) {
     // Step 5 - If we are on our return trip and we have swept 180 degress without finding color, we're probably done.
