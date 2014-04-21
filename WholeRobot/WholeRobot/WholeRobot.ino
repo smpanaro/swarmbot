@@ -45,10 +45,11 @@ volatile int numBlues = 0;
 volatile int colorBufferIndex = 0;
 volatile color_t colorBuffer[COLOR_BUFFER_SIZE]; // dynamically filled in colorCalibration function;
 int BLUE_PWM = 0; // Brightness of the blue LED
-volatile int RED_BASE = 266;
-volatile int BLUE_BASE = 200;
+volatile int RED_BASE = 290;
+volatile int BLUE_BASE = 290;
 
-// State 
+// State
+volatile color_t lastColor = BLACK;
 volatile color_t currentColor = BLACK;
 state_t currentState = START_STATE;
 state_t lastState = (state_t)NULL;
@@ -64,7 +65,7 @@ const int SEARCH_FORWARD_SPEED = 60;
 const int TURN_SPEED = 60;
 const int MILLIS_TO_TURN_90 = 500;
 
-const int COLOR_DETECTION_DELTA = 70; // Difference from base value to indicate a color's presence.
+const int COLOR_DETECTION_DELTA = 50; //70; // Difference from base value to indicate a color's presence.
 
 void setup(){
    
@@ -135,7 +136,6 @@ void loop(){
 
 void updateState() {
   if (currentState == START_STATE && bumperPressPending) {
-    Serial.println("BUMPED");
     lastState = currentState;
     currentState = FIRST_BUMP_STATE;
   } 
@@ -179,11 +179,29 @@ void handleFirstBumpState() {
     reverse(FORWARD_SPEED);delay(350);
     stop(); delay(100);
     
-    turn('r', 160);
-//    right(TURN_SPEED);
-//    delayWhileColorNotDetected(MILLIS_TO_TURN_90*(float(180)/90.0));
+    // Spin towards the line. (Since we undershoot a bit, it matters which way we turn.)
+    if (lastColor == BLUE) turn('r', 160);
+    else turn('l', 160);
+    stop(); delay(100);
     
-    forward(FORWARD_SPEED); delay(100); //100 with full batteries
+    // Drive until we see the line.
+    forward(FORWARD_SPEED);
+    delayUntilColor();
+    
+    //Now continue over the line - in the process setting lastColor to the color of the line we just crossed.
+    delayUntilBlack();
+    
+    stop(); delay(100);
+    
+    // Turn so that we're facing the right direction on the line.
+    if (lastColor == BLUE) left(TURN_SPEED-5);
+    else right(TURN_SPEED-5);
+    delayUntilColor();
+    stop(); delay(100);
+    
+    // We should now be facing the far wall, with our color sensor on the line.
+    
+    // Clear everything now that we've handled the bump.
     lastState = FIRST_BUMP_STATE;
     bumperPressPending = false;
     pendingBumper = NONE;
@@ -196,13 +214,16 @@ void handleSecondBumpState() {
     reverse(FORWARD_SPEED);delay(500);
     stop(); delay(100);
 
-//    turn('r', 180);
+    // Spin around onto the line.
     right(TURN_SPEED);
-    delay(MILLIS_TO_TURN_90*(float(180)/90.0)); // turn at leat 180
-    delayWhileColorNotDetected(MILLIS_TO_TURN_90*(float(90)/90.0)); // then keep going until there's color
+    if (currentColor == BLACK) delayUntilColor(); // We are still facing the wall but slightly off the line. Turn onto it.
+    // We are now facing the wall with our color sensor on the line.
+    delayUntilBlack();
+    delayUntilColor(); 
+    stop(); delay(100);
     
 
-    forward(FORWARD_SPEED); delay(100);
+    //forward(FORWARD_SPEED); delay(100);
     lastState = SECOND_BUMP_STATE;
     bumperPressPending = false;
     pendingBumper = NONE;
@@ -214,18 +235,7 @@ void handleEndOfLineState() {
   stop(); delay(100);
 }
 
-void handleLineFollowState() {
-  if (lastState == FIRST_BUMP_STATE) {
-    //TODO: We might overshoot here. Might need to shuffle ourselves to be on the line.
-    forward(FORWARD_SPEED); delay(500); // This is to compensate for the light sensor being way ahead of the bot.
-    stop(); delay(100);
-    
-//    if (currentColor == BLUE) left(TURN_SPEED); //turn('l', 70);
-//    else right(TURN_SPEED); //turn('r', 70);
-    left(TURN_SPEED);
-    delayWhileColorNotDetected(MILLIS_TO_TURN_90*(float(90)/90.0));
-  }
-  
+void handleLineFollowState() {  
   if (lastState != LINE_FOLLOW_STATE) {
     // Clear last state. No need to go forward and delay if we're already moving.
     lastState = LINE_FOLLOW_STATE;
@@ -234,7 +244,44 @@ void handleLineFollowState() {
   }
 }
 
+
 void handleLineSearchState() {
+  stop(); delay(100);
+  
+  //reverse(55);
+  //delayUntilColor();
+  
+  unsigned long turnTime = 350;
+  
+  left(60);
+  delayWhileColorNotDetected(turnTime);
+  stop(); delay(100);
+  
+  if (currentColor != BLACK) {
+    return;
+  }
+  
+  right(60);
+  delayWhileColorNotDetected(2*turnTime);
+  stop(); delay(100);
+  
+  if (currentColor != BLACK) {
+    return;
+  }
+  
+  left(60);
+  delay(turnTime);
+  stop(); delay(100);
+  
+  reverse(60); delay(200);
+  stop(); delay(100);
+  
+  if (onReturnTrip) currentState = END_OF_LINE_STATE;
+  
+}
+
+
+void handleLineSearchStateOLDVERSION() {
   if (currentColor != BLACK) {
     // No need to explicitly course correct because our color sensor doesn't immediately update.
     // We've likely rotated the extra amount we need anyways.
@@ -283,20 +330,28 @@ void handleLineSearchState() {
   else if (shouldAdvanceStates && nextSearchState == REVERSE) {
     stop(); delay(100);
     // Step 4 - If we still can't find it, back up a bit (towards the line) and we'll try again on the next loop.
-    reverse(SEARCH_FORWARD_SPEED);
-    nextSearchState = START;
+    reverse(55); //SEARCH_FORWARD_SPEED);
+    nextSearchState = DONE;
     
     
     // ALL THE HACKS - srsly, this needs to be removed. and the states below need to start working correctly.
-    currentState = END_OF_LINE_STATE;
+    //currentState = END_OF_LINE_STATE;
     
-    currentSearchStateEndMillis = millis() + 500;
+    currentSearchStateEndMillis = millis(); // + 500;
+    delayUntilColor();
   }
-  else if (onReturnTrip && shouldAdvanceStates && nextSearchState == START) {
-    // Step 5 - If we are on our return trip and we have swept 180 degress without finding color, we're probably done.
-    stop(); delay(100);
+  else if (shouldAdvanceStates && nextSearchState == DONE) {
+    // Step 5a - If we are heading toward the wall, drive forward a bit to hit it.
+//    if (!onReturnTrip) forward(SEARCH_FORWARD_SPEED); delayUntilBump();
+    
+    // Step 5b - If we are on our return trip and we have swept 180 degress without finding color, we're probably done.
+    if (onReturnTrip) {
+      stop(); delay(100);
+      currentState = END_OF_LINE_STATE;
+    }
+    
+    
     nextSearchState = START; // shouldn't matter
-    currentState = END_OF_LINE_STATE;
   }
 }
 
@@ -306,6 +361,18 @@ void delayWhileColorNotDetected(unsigned long delayMillis) {
   while (millis() < endTime) {
     if (currentColor != BLACK) break;
   } 
+}
+
+void delayUntilBlack() {
+  while (currentColor != BLACK){}
+}
+
+void delayUntilColor() {
+  while (currentColor == BLACK){}
+}
+
+void delayUntilBump() {
+  while(!bumperPressPending) {};
 }
 
 // Delay for delayMillis unless a bumper is pressed. Return whether a bumper was pressed.
@@ -365,7 +432,10 @@ void calibrateColorSensing() {
 }
 
 void colorSensorISR() {
-  currentColor = detectColor();
+  color_t newColor = detectColor();
+  // If the color we just read is different from the last color we were on, update lastColor.
+  if (newColor != currentColor) lastColor = currentColor;
+  currentColor = newColor;
 }
 
 
@@ -512,6 +582,42 @@ void right(int m1_high, int m1_low, int m2_high, int m2_low, int speed) {
   setLowPin(m1_high, m1_low, speed*M1_DEFICIT);
   setLowPin(m2_high, m2_low, speed);
 }
+
+void pivot_left(int speed) {
+  pivot_left(M1_HIGH_PIN, M1_LOW_PIN, M2_HIGH_PIN, M2_LOW_PIN, speed);
+}
+
+void pivot_left(int m1_high, int m1_low, int m2_high, int m2_low, int speed) {
+  setHighPin(m1_high, m1_low, speed*M1_DEFICIT);
+  setHighPin(m2_high, m2_low, 0);
+}
+void pivot_right(int speed) {
+  pivot_right(M1_HIGH_PIN, M1_LOW_PIN, M2_HIGH_PIN, M2_LOW_PIN, speed);
+}
+
+void pivot_right(int m1_high, int m1_low, int m2_high, int m2_low, int speed) {
+  setLowPin(m1_high, m1_low, 0);
+  setLowPin(m2_high, m2_low, speed);
+}
+
+void rev_pivot_left(int speed) {
+  rev_pivot_left(M1_HIGH_PIN, M1_LOW_PIN, M2_HIGH_PIN, M2_LOW_PIN, speed);
+}
+
+void rev_pivot_left(int m1_high, int m1_low, int m2_high, int m2_low, int speed) {
+  setLowPin(m1_high, m1_low, speed*M1_DEFICIT);
+  setHighPin(m2_high, m2_low, 0);
+}
+void rev_pivot_right(int speed) {
+  rev_pivot_right(M1_HIGH_PIN, M1_LOW_PIN, M2_HIGH_PIN, M2_LOW_PIN, speed);
+}
+
+void rev_pivot_right(int m1_high, int m1_low, int m2_high, int m2_low, int speed) {
+  setLowPin(m1_high, m1_low, 0);
+  setHighPin(m2_high, m2_low, speed);
+}
+
+
 
 void turn(char dir, int angle){
   if(dir == 'l'){
