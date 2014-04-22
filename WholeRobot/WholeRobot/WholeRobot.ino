@@ -1,5 +1,6 @@
 #include <TimerOne.h>
 #include "constants.h" // import custom types and constants
+#include "mario.h"
 
 // Debug Statements
 //#define DEBUG_COLOR // uncomment this line to enable printing color sensing debug statements
@@ -102,6 +103,8 @@ void setup(){
    Timer1.attachInterrupt(colorSensorISR, 50000); // NOTE: Docs say this breaks analogWrite on digital pins 9 and 10!
    //COLOR_PRINT("blue base:");COLOR_PRINT(BLUE_BASE);
    //COLOR_PRINT(" red base:");COLOR_PRINTLN(RED_BASE);
+   
+   pinMode(soundPin, OUTPUT);
 }
 
 void loop(){
@@ -115,6 +118,8 @@ void loop(){
   stop();
   delay(100000);
   */
+  //return;
+  
   updateState();
   
   switch(currentState){
@@ -190,7 +195,6 @@ void handleFirstBumpState() {
     
     //Now continue over the line - in the process setting lastColor to the color of the line we just crossed.
     delayUntilBlack();
-    
     stop(); delay(100);
     
     // Turn so that we're facing the right direction on the line.
@@ -233,6 +237,16 @@ void handleSecondBumpState() {
 void handleEndOfLineState() {
   // Will need to transmit here eventually.
   stop(); delay(100);
+  
+  // Victory song.
+  Timer1.detachInterrupt();
+  right(70);
+  marioFlag();
+  delay(5000);
+  stop(); delay(100);
+  
+  // Chill, cause we done.
+  while(true);
 }
 
 void handleLineFollowState() {  
