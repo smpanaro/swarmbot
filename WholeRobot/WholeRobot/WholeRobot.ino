@@ -136,6 +136,7 @@ void setup(){
   else mode = SOLO;
 
   // Flash the indicators to indicate mode.
+  // Red - Master, Blue - Slave, Both - Solo
   if (mode == SLAVE) {
     digitalWrite(BLUE_INDICATOR_LED, HIGH);
     delay(1000);
@@ -181,7 +182,7 @@ void loop(){
     default: break;
   }
 
-  if (mode == SOLO) lightIndicatorLEDs();
+  if (mode == SOLO) lightIndicatorLEDs(); // Maybe do this in the ISR - though maybe not since it's for laughs.
   //delay(100); // need this or our loop gets frozen sometimes
 }
 
@@ -238,6 +239,14 @@ void lightIndicatorLEDs() {
 }
 
 void handleStartState() {
+  if (mode == SLAVE) {
+    // First, wait to hear from the master about what color they found.
+
+    // Next, wait to hear from the master that they are done.
+
+    // Now go.
+  }
+  // For Master and Solo, we don't need to wait to start.
   forward(FORWARD_SPEED);
   delay(100);
 }
@@ -260,6 +269,12 @@ void handleFirstBumpState() {
     //Now continue over the line - in the process setting lastColor to the color of the line we just crossed.
     delayUntilBlack();
     stop(); delay(100);
+
+    if (mode == MASTER) {
+      // Communicate what color we found.
+      // Use lastColor since this is after we've stopped on the black.
+      // e.g. communicateColor(lastColor);
+    }
 
     // Turn so that we're facing the right direction on the line.
     if (lastColor == BLUE) left(TURN_SPEED-5);
@@ -290,8 +305,6 @@ void handleSecondBumpState() {
     delayUntilColor();
     stop(); delay(100);
 
-
-    //forward(FORWARD_SPEED); delay(100);
     lastState = SECOND_BUMP_STATE;
     bumperPressPending = false;
     pendingBumper = NONE;
@@ -299,8 +312,11 @@ void handleSecondBumpState() {
 }
 
 void handleEndOfLineState() {
-  // Will need to transmit here eventually.
   stop(); delay(100);
+
+  if (mode == MASTER) {
+    // Inform the slave that we've finished our run. Yay.
+  }
 
   // Victory song.
   Timer1.detachInterrupt();
