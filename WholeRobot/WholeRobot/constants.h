@@ -9,4 +9,5 @@ enum state_t {
   END_OF_LINE_STATE = (1 << 5)
 };
 enum search_state_t {START, PIVOT_LEFT, PIVOT_RIGHT, PIVOT_TO_ORIG_POS, REVERSE, DONE};
+enum mode_t {SOLO, MASTER, SLAVE};
 
