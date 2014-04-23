@@ -563,8 +563,18 @@ void calibrateColorSensing() {
 
 void colorSensorISR() {
   color_t newColor = detectColor();
-  // If the color we just read is different from the last color we were on, update lastColor.
-  if (newColor != currentColor) lastColor = currentColor;
+  if (newColor != currentColor) {
+    // Toggle indicator LEDs (for debugging and fun).
+    if (mode == SOLO) {
+      if (lastColor == RED) digitalWrite(RED_INDICATOR_LED, LOW);
+      else if (lastColor == BLUE) digitalWrite(BLUE_INDICATOR_LED, LOW);
+      if (currentColor == RED) digitalWrite(RED_INDICATOR_LED, HIGH);
+      else if (currentColor == BLUE) digitalWrite(BLUE_INDICATOR_LED, HIGH);
+    }
+
+    // If the color we just read is different from the last color we were on, update lastColor.
+    lastColor = currentColor;
+  }
   currentColor = newColor;
 }
 
