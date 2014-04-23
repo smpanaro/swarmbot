@@ -241,8 +241,10 @@ void lightIndicatorLEDs() {
 void handleStartState() {
   if (mode == SLAVE) {
     // First, wait to hear from the master about what color they found.
+    // Light that indicator LED.
 
     // Next, wait to hear from the master that they are done.
+    // Turn off the indicator LED.
 
     // Now go.
   }
@@ -270,10 +272,12 @@ void handleFirstBumpState() {
     delayUntilBlack();
     stop(); delay(100);
 
-    if (mode == MASTER) {
+    if (mode == MASTER || mode == SLAVE) {
       // Communicate what color we found.
       // Use lastColor since this is after we've stopped on the black.
       // e.g. communicateColor(lastColor);
+
+      //Turn on the indicator LED for the color we found.
     }
 
     // Turn so that we're facing the right direction on the line.
@@ -316,11 +320,29 @@ void handleEndOfLineState() {
 
   if (mode == MASTER) {
     // Inform the slave that we've finished our run. Yay.
+
+    // Wait for the slave to tell us what color they found.
+    // Turn on that indicator LED.
+
+    // Wait for the slave to tell us that they are done.
+    // Flash both LEDs 3 times, with a frequency of 1 flash/second. Then turn both LEDs off.
+    for (int i = 0; i < 3; i++) {
+      digitalWrite(RED_INDICATOR_LED, HIGH);
+      digitalWrite(BLUE_INDICATOR_LED, HIGH);
+      delay(1000);
+      digitalWrite(RED_INDICATOR_LED, LOW);
+      digitalWrite(BLUE_INDICATOR_LED, LOW);
+    }
+  }
+  else if (mode == SLAVE) {
+    // Turn off indicator LED for 1 second, then turn it back on.
+
+    // Communicate to master that we are done.
   }
 
   // Victory song.
   Timer1.detachInterrupt();
-  right(70);
+  // right(70); // This kind of messes up our final position, and accuracy is part of the requirements.
   marioFlag();
   delay(5000);
   stop(); delay(100);
