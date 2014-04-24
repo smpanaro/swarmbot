@@ -1,54 +1,6 @@
 #include <TimerOne.h>
 
 
-#define KPIN 5
-#define RXMASKPIN 40
-#define DEBUGPIN 7
-#define DEBUGLED 13
-//1600
-#define DATARATE 1600
-#define TESTDATARATE 250
-#define COMMINTERRUPT 0 //pin 2
-
-//Communication Defines
-//error status
-#define DATA_OK 0
-#define BAD_SYNC_BYTE 8
-#define BAD_DATA_BYTE 9
-#define TIMEOUT 10
-#define BAD_EOM_BYTE 13
-//messages
-#define ACK 0
-#define NACK 1
-#define PING 2
-#define FOUND_BLUE 3
-#define FOUND_RED 4
-#define COLLISION 5
-#define DONE 6
-#define NACK_SYNCBYTE 7
-#define NO_DATA_READY 255
-//easy way to change active high/low
-#define ONE 1
-#define ZERO 0
-//Byte definitions
-#define SYNC_BYTE 0xA6
-#define ZERO_DATA_BYTE 0xCC
-#define ONE_DATA_BYTE 0xAA
-#define EOM_BYTE 0xFF
-
-//txState Values
-#define CHILLIN 0
-#define SENDING 1
-#define WAITFORACK 2
-#define NEEDTOACK 3
-#define ACKING 4
-#define NEEDTONACK 5
-#define RECEIVING 6
-#define SERIALERROR 7
-
-//masked
-#define UNMASKED HIGH
-#define MASKED LOW
 
 //Messages
 const byte BLUE_FOUND = 100; //d
@@ -57,8 +9,15 @@ const byte DONE_MSG = 120; //x
 const byte RECEIVED = 60;
 const byte NO_MESSAGE = 0;
 
+//Messages
+const byte MY_BLUE_FOUND = 105;
+const byte MY_RED_FOUND = 114;
+const byte MY_DONE_MSG = 125;
+const byte MY_RECEIVED = 65;
+const byte MY_NO_MESSAGE = 5;
 
-#define PACKET_MILLIS 50
+
+#define PACKET_MILLIS 500
 
 // Colors
 #define RED_COLOR 1
@@ -66,6 +25,8 @@ const byte NO_MESSAGE = 0;
 
 #define RED_PIN 52
 #define BLUE_PIN 53
+
+#define maskPin 34
 
 // void setup() {
 //   //Setup Oscillation
@@ -104,22 +65,25 @@ void colorFound(int color)
   for (; ; ) {
     byte msg;
     Serial.println("In colorFound");
+    mask();
       switch(color)
       {
         case RED_COLOR:
-          Serial2.write(RED_FOUND);
+          Serial2.write(MY_RED_FOUND);
           break;
 
         case BLUE_COLOR:
-          Serial2.write(BLUE_FOUND);
+          Serial2.write(MY_BLUE_FOUND);
           break;
       }
       Serial2.flush();
+      unmask();
+
       delay(PACKET_MILLIS);
       msg = NO_MESSAGE;
       while((Serial2.available()>0)&&(!isValid(msg = Serial2.read())));
-      if (msg != NO_MESSAGE) {
-      Serial.print("Received msg");
+      if (isValid(msg)) {
+      Serial.print("Received msg!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
       Serial.print(msg,DEC);
       Serial.println();
       } else {
@@ -137,7 +101,7 @@ void beSlave()
   Serial.println("In slave mode");
   boolean valid = false;
   byte m;
-
+  Serial2.flush();
   while(!valid)
   {
     m = receiveMessage();
@@ -152,24 +116,29 @@ void beSlave()
   else
     lightLED(RED_COLOR);
 
-
+  valid = false;
   while(!valid)
   {
     m = receiveMessage();
 
     if (isValid(m)) valid = true;
   }
+  Serial.print("Received message:");
+    Serial.println(m);
 }
 
  void finishedMaster()
  {
   for (; ; ) {
+    mask();
     byte msg;
     Serial.println("In finishedMaster");
 
-      Serial2.write(DONE_MSG);
+      Serial2.write(MY_DONE_MSG);
 
       Serial2.flush();
+      unmask();
+
       delay(PACKET_MILLIS);
       msg = NO_MESSAGE;
       while((Serial2.available()>0)&&(!isValid(msg = Serial2.read())));
@@ -186,10 +155,12 @@ void beSlave()
   }
  }
 
-void pingBack()
-{
-
-  Serial2.write(RECEIVED);
+void pingBack() {
+  mask();
+  Serial.println("pinging back");
+  Serial2.write(MY_RECEIVED);
+  Serial2.flush();
+  unmask();
 }
 
 void lightLED(int color)
@@ -212,5 +183,18 @@ byte receiveMessage() {
 }
 
 boolean isValid(byte msg) {
+  Serial.println(msg);
   return ((msg == BLUE_FOUND) || (msg == RED_FOUND) || (msg == DONE_MSG) || (msg == RECEIVED));
 }
+
+void mask()
+{
+  digitalWrite(maskPin, LOW);
+
+}
+
+void unmask()
+{
+  digitalWrite(maskPin, HIGH);
+}
+

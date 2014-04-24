@@ -6,7 +6,8 @@ enum state_t {
   LINE_SEARCH_STATE = (1 << 2),
   FIRST_BUMP_STATE  = (1 << 3),
   SECOND_BUMP_STATE = (1 << 4),
-  END_OF_LINE_STATE = (1 << 5)
+  END_OF_LINE_STATE = (1 << 5),
+  NO_STATE          = (1 << 6)
 };
 enum search_state_t {START, PIVOT_LEFT, PIVOT_RIGHT, PIVOT_TO_ORIG_POS, REVERSE, DONE};
 enum mode_t {SOLO, MASTER, SLAVE};

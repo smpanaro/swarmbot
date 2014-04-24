@@ -2,6 +2,8 @@
 #include "constants.h" // import custom types and constants
 #include "mario.h"
 
+#include <Servo.h>
+
 // Debug Statements
 //#define DEBUG_COLOR // uncomment this line to enable printing color sensing debug statements
 #ifdef DEBUG_COLOR
@@ -26,10 +28,10 @@
 // Motor Pins
 // all need to be on analogWrite-able pins. (2 - 13 and 44 - 46)
 // M1 is the right wheel. M2, the left.
-#define M1_HIGH_PIN 6
-#define M1_LOW_PIN 7
-#define M2_HIGH_PIN 8
-#define M2_LOW_PIN 9
+#define M1_HIGH_PIN 8
+#define M1_LOW_PIN 9
+#define M2_HIGH_PIN 6
+#define M2_LOW_PIN 7
 const float M1_DEFICIT = 0.9552; // The percent of M2's power that M1 should get.
 
 // Comm Pins
@@ -57,8 +59,8 @@ volatile int numBlues = 0;
 volatile int colorBufferIndex = 0;
 volatile color_t colorBuffer[COLOR_BUFFER_SIZE]; // dynamically filled in colorCalibration function;
 int BLUE_PWM = 0; // Brightness of the blue LED
-volatile int RED_BASE = 290;
-volatile int BLUE_BASE = 290;
+volatile int RED_BASE = 330;
+volatile int BLUE_BASE = 330;
 
 #define RED_INDICATOR_LED 52 // For indicating when we've found a color.
 #define BLUE_INDICATOR_LED 53
@@ -67,7 +69,7 @@ volatile int BLUE_BASE = 290;
 volatile color_t lastColor = BLACK;
 volatile color_t currentColor = BLACK;
 state_t currentState = START_STATE;
-state_t lastState = (state_t)NULL;
+state_t lastState = NO_STATE;
 boolean onReturnTrip = false;
 
 mode_t mode; // Determines whether we should go solo or one of the swarm modes.
@@ -75,6 +77,11 @@ mode_t mode; // Determines whether we should go solo or one of the swarm modes.
 // Line searching
 unsigned long currentSearchStateEndMillis = 0;
 search_state_t nextSearchState = START;
+
+// Go Beyond
+// soundPin is set in Mario.h
+Servo flagServo;
+#define FLAG_PIN 10 // must be 9 or 10
 
 // Solo v. Swarm (Master v. Slave)
 // Connect either SLAVE_CONTROL or MASTER_CONTROL to 5V to enable slave or master.
@@ -130,12 +137,12 @@ void setup(){
   //COLOR_PRINT("blue base:");COLOR_PRINT(BLUE_BASE);
   //COLOR_PRINT(" red base:");COLOR_PRINTLN(RED_BASE);
 
-
   pinMode(BLUE_INDICATOR_LED, OUTPUT);
   pinMode(RED_INDICATOR_LED, OUTPUT);
 
   // Go Beyond
-  pinMode(soundPin, OUTPUT);
+  // pinMode(soundPin, OUTPUT);
+  // flagServo.attach(FLAG_PIN);
 
   // Determine Mode (Solo, Master or Slave)
   pinMode(SLAVE_GND, OUTPUT); digitalWrite(SLAVE_GND, LOW);
@@ -145,6 +152,8 @@ void setup(){
   if (digitalRead(SLAVE_CONTROL) == HIGH) mode = SLAVE;
   else if (digitalRead(MASTER_CONTROL) == HIGH) mode = MASTER;
   else mode = SOLO;
+
+  //BLUE_PWM = 0;
 
   // Flash the indicators to indicate mode.
   // Red - Master, Blue - Slave, Both - Solo
@@ -169,10 +178,12 @@ void setup(){
 }
 
 void loop(){
-  /*Serial.print("current state: ");Serial.print(currentState);
+  /*
+  Serial.print("current state: ");Serial.print(currentState);
   Serial.print(" current color: ");Serial.print(currentColor);
   Serial.print(" search state: ");Serial.println(((int)nextSearchState)-1);
-*/
+  */
+
   /*calibrating turning
   left(TURN_SPEED);
   delay((MILLIS_TO_TURN_90*(float(90)/90.0)));
@@ -180,6 +191,18 @@ void loop(){
   delay(100000);
   */
   //return;
+
+  // flagServo.write(120);
+  // delay(3000);
+  // flagServo.write(10);
+  // delay(3000);
+  // return;
+
+ // beSlave();
+  colorFound(1);
+  delay(1000000);
+  return;
+
   updateState();
 
   switch(currentState){
@@ -249,20 +272,23 @@ void lightIndicatorLEDs() {
 }
 
 void handleStartState() {
-  if (mode == SLAVE) {
-    // First, wait to hear from the master about what color they found.
-    // Light that indicator LED.
+  if (lastState == NO_STATE) {
+    if (mode == SLAVE) {
+      // First, wait to hear from the master about what color they found.
+      // Light that indicator LED.
 
-    // Next, wait to hear from the master that they are done.
-    // Turn off the indicator LED.
-    COMM_PRINTLN("Being slave at start state.");
-    beSlave(); // Accomplishes all of the above actions.
-    // Now go.
-    COMM_PRINTLN("Done being slave at start state.");
+      // Next, wait to hear from the master that they are done.
+      // Turn off the indicator LED.
+      COMM_PRINTLN("Being slave at start state.");
+      beSlave(); // Accomplishes all of the above actions.
+      // Now go.
+      COMM_PRINTLN("Done being slave at start state.");
+    }
+    // For Master and Solo, we don't need to wait to start.
+    forward(FORWARD_SPEED);
+    delay(100);
+    lastState = START_STATE;
   }
-  // For Master and Solo, we don't need to wait to start.
-  forward(FORWARD_SPEED);
-  delay(100);
 }
 
 void handleFirstBumpState() {
@@ -585,7 +611,7 @@ void calibrateColorSensing() {
 
    COLOR_PRINT("initial diff:"); COLOR_PRINTLN(difference);
 
-   while (difference > COLOR_DETECTION_DELTA) {
+   while (difference > COLOR_DETECTION_DELTA && BLUE_PWM < 255) {
      if (difference > 2 * COLOR_DETECTION_DELTA) BLUE_PWM += 4;
      BLUE_PWM++;
      redVal = getRedLedValue(false);
@@ -612,12 +638,12 @@ void colorSensorISR() {
   color_t newColor = detectColor();
   if (newColor != currentColor) {
     // Toggle indicator LEDs (for debugging and fun).
-    if (mode == SOLO) {
+    /*if (mode == SOLO) {
       if (lastColor == RED) digitalWrite(RED_INDICATOR_LED, LOW);
       else if (lastColor == BLUE) digitalWrite(BLUE_INDICATOR_LED, LOW);
       if (currentColor == RED) digitalWrite(RED_INDICATOR_LED, HIGH);
       else if (currentColor == BLUE) digitalWrite(BLUE_INDICATOR_LED, HIGH);
-    }
+    }*/
 
     // If the color we just read is different from the last color we were on, update lastColor.
     lastColor = currentColor;
