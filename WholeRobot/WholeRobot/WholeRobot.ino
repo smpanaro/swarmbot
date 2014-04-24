@@ -12,6 +12,16 @@
   #define COLOR_PRINTLN(x)
 #endif
 
+#define DEBUG_COMMS
+#ifdef DEBUG_COMMS
+  String commPrefix = "[COMMS]: ";
+  #define COMM_PRINT(x) Serial.print (x)
+  #define COMM_PRINTLN(x)  Serial.println (commPrefix + x)
+#else
+  #define COMM_PRINT(x)
+  #define COMM_PRINTLN(x)
+#endif
+
 
 // Motor Pins
 // all need to be on analogWrite-able pins. (2 - 13 and 44 - 46)
@@ -101,6 +111,7 @@ void setup(){
   TCCR3B = _BV(WGM32) | _BV(WGM33) | _BV(CS31);
   OCR3A = 39; // sets the value at which the register resets. 39 generates 25kHz
   digitalWrite(5, HIGH); // turn on the carrier
+  Serial2.begin(300); // Transmit data here.
 
   // Collision
   attachInterrupt(2, backBumperISR, RISING); // pin 21
@@ -122,8 +133,8 @@ void setup(){
 
   pinMode(BLUE_INDICATOR_LED, OUTPUT);
   pinMode(RED_INDICATOR_LED, OUTPUT);
-  // digitalWrite(RED_INDICATOR_LED, HIGH);
-  // digitalWrite(BLUE_INDICATOR_LED, LOW);
+
+  // Go Beyond
   pinMode(soundPin, OUTPUT);
 
   // Determine Mode (Solo, Master or Slave)
@@ -169,7 +180,6 @@ void loop(){
   delay(100000);
   */
   //return;
-
   updateState();
 
   switch(currentState){
@@ -245,8 +255,10 @@ void handleStartState() {
 
     // Next, wait to hear from the master that they are done.
     // Turn off the indicator LED.
-
+    COMM_PRINTLN("Being slave at start state.");
+    beSlave(); // Accomplishes all of the above actions.
     // Now go.
+    COMM_PRINTLN("Done being slave at start state.");
   }
   // For Master and Solo, we don't need to wait to start.
   forward(FORWARD_SPEED);
@@ -276,8 +288,22 @@ void handleFirstBumpState() {
       // Communicate what color we found.
       // Use lastColor since this is after we've stopped on the black.
       // e.g. communicateColor(lastColor);
+      int c = -1; // reconcile different RED/BLUE pin values for now. Clean up later
+      if (lastColor == RED) c = 1;
+      else if (lastColor == BLUE) c = 2;
+      COMM_PRINTLN("Entering colorFound after first bump.");
+      colorFound(c);
+      COMM_PRINTLN("Finished colorFound after first bump.");
 
       //Turn on the indicator LED for the color we found.
+      if (lastColor == RED) {
+        digitalWrite(BLUE_INDICATOR_LED, LOW);
+        digitalWrite(RED_INDICATOR_LED, HIGH);
+      }
+      else if (lastColor == BLUE) {
+        digitalWrite(BLUE_INDICATOR_LED, HIGH);
+        digitalWrite(RED_INDICATOR_LED, LOW);
+      }
     }
 
     // Turn so that we're facing the right direction on the line.
@@ -320,11 +346,18 @@ void handleEndOfLineState() {
 
   if (mode == MASTER) {
     // Inform the slave that we've finished our run. Yay.
+    COMM_PRINTLN("Informing second bot that we are done.");
+    finishedMaster();
+    COMM_PRINTLN("Finished informing second bot that we are done.");
 
     // Wait for the slave to tell us what color they found.
     // Turn on that indicator LED.
 
     // Wait for the slave to tell us that they are done.
+    COMM_PRINTLN("First bot being comms slave.");
+    beSlave(); // slave in the communication sense, not the mode sense -- TODO: fix the naming...
+    COMM_PRINTLN("First bot finished being comms slave.");
+
     // Flash both LEDs 3 times, with a frequency of 1 flash/second. Then turn both LEDs off.
     for (int i = 0; i < 3; i++) {
       digitalWrite(RED_INDICATOR_LED, HIGH);
@@ -336,8 +369,22 @@ void handleEndOfLineState() {
   }
   else if (mode == SLAVE) {
     // Turn off indicator LED for 1 second, then turn it back on.
-
+    bool redIndicatorOn = false;
+    if (digitalRead(RED_INDICATOR_LED) == HIGH) redIndicatorOn = true;
+    if (redIndicatorOn) {
+      digitalWrite(RED_INDICATOR_LED, LOW);
+      delay(1000);
+      digitalWrite(RED_INDICATOR_LED, HIGH);
+    }
+    else {
+      digitalWrite(BLUE_INDICATOR_LED, LOW);
+      delay(1000);
+      digitalWrite(BLUE_INDICATOR_LED, HIGH);
+    }
     // Communicate to master that we are done.
+    COMM_PRINTLN("Second bot informing first bot that we are done.");
+    finishedMaster();
+    COMM_PRINTLN("Finished informing first bot.");
   }
 
   // Victory song.
