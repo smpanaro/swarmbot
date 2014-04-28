@@ -199,8 +199,18 @@ void loop(){
   // return;
 
  // beSlave();
-  colorFound(1);
-  delay(1000000);
+//beMaster();
+// delay(100000000);
+//  for (int i = 0; i < 10; i++) {
+//    Serial2.write(111);
+//  }
+  while (Serial2.available() > 0) {
+//    Serial2.write(234);
+//    delay(500);
+//    __asm__("nop\n\t"); 
+     byte msg = Serial2.read();
+     Serial.println(msg);
+  }
   return;
 
   updateState();

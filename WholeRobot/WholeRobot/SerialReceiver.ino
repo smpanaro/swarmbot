@@ -83,7 +83,7 @@ void colorFound(int color)
       msg = NO_MESSAGE;
       while((Serial2.available()>0)&&(!isValid(msg = Serial2.read())));
       if (isValid(msg)) {
-      Serial.print("Received msg!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+      Serial.print("Received");
       Serial.print(msg,DEC);
       Serial.println();
       } else {
