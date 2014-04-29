@@ -17,7 +17,8 @@ const byte MY_RECEIVED = 65;
 const byte MY_NO_MESSAGE = 5;
 
 
-#define PACKET_MILLIS 500
+#define PACKET_MILLIS 200
+#define NUM_PING_BACKS 10
 
 // Colors
 #define RED_COLOR 1
@@ -156,11 +157,13 @@ void beSlave()
  }
 
 void pingBack() {
-  mask();
-  Serial.println("pinging back");
-  Serial2.write(MY_RECEIVED);
-  Serial2.flush();
-  unmask();
+  for (int i = 0; i < NUM_PING_BACKS; i++) {
+    mask();
+    Serial.println("pinging back");
+    Serial2.write(MY_RECEIVED);
+    Serial2.flush();
+    unmask();  
+  }
 }
 
 void lightLED(int color)
@@ -183,7 +186,7 @@ byte receiveMessage() {
 }
 
 boolean isValid(byte msg) {
-  Serial.println(msg);
+  //if (msg != 0) Serial.println(msg);
   return ((msg == BLUE_FOUND) || (msg == RED_FOUND) || (msg == DONE_MSG) || (msg == RECEIVED));
 }
 

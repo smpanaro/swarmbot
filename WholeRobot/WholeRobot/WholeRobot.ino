@@ -32,7 +32,8 @@
 #define M1_LOW_PIN 9
 #define M2_HIGH_PIN 6
 #define M2_LOW_PIN 7
-const float M1_DEFICIT = 0.9552; // The percent of M2's power that M1 should get.
+const float M1_DEFICIT = 0.75; //0.9552; // The percent of M2's power that M1 should get.
+const float MOTOR_POWER_MULTIPLIER = 1.35; // multiply all motor power by this.
 
 // Comm Pins
 #define CARRIER_PIN 5 // carrier only comes out on 5! do not change!
@@ -93,10 +94,11 @@ Servo flagServo;
 
 
 // Configuration
+
 const int FORWARD_SPEED = 70;
 const int SEARCH_FORWARD_SPEED = 60;
 const int TURN_SPEED = 60;
-const int MILLIS_TO_TURN_90 = 500;
+const int MILLIS_TO_TURN_90 = 400;//500;
 
 const int COLOR_DETECTION_DELTA = 50; //70; // Difference from base value to indicate a color's presence.
 
@@ -118,6 +120,7 @@ void setup(){
   TCCR3B = _BV(WGM32) | _BV(WGM33) | _BV(CS31);
   OCR3A = 39; // sets the value at which the register resets. 39 generates 25kHz
   digitalWrite(5, HIGH); // turn on the carrier
+  //Serial.println("remember you turned off serial2.begin");
   Serial2.begin(300); // Transmit data here.
 
   // Collision
@@ -149,9 +152,11 @@ void setup(){
   pinMode(MASTER_GND, OUTPUT); digitalWrite(MASTER_GND, LOW);
   pinMode(SLAVE_CONTROL, INPUT);
   pinMode(MASTER_CONTROL, INPUT);
-  if (digitalRead(SLAVE_CONTROL) == HIGH) mode = SLAVE;
-  else if (digitalRead(MASTER_CONTROL) == HIGH) mode = MASTER;
-  else mode = SOLO;
+//  if (digitalRead(SLAVE_CONTROL) == HIGH) mode = SLAVE;
+//  else if (digitalRead(MASTER_CONTROL) == HIGH) mode = MASTER;
+//  else mode = SOLO;
+
+  mode = MASTER;
 
   //BLUE_PWM = 0;
 
@@ -178,11 +183,11 @@ void setup(){
 }
 
 void loop(){
-  /*
+  
   Serial.print("current state: ");Serial.print(currentState);
   Serial.print(" current color: ");Serial.print(currentColor);
   Serial.print(" search state: ");Serial.println(((int)nextSearchState)-1);
-  */
+  
 
   /*calibrating turning
   left(TURN_SPEED);
@@ -196,22 +201,24 @@ void loop(){
   // delay(3000);
   // flagServo.write(10);
   // delay(3000);
-  // return;
+  // return;ÂÂ
 
- // beSlave();
+//  beSlave();
+  //delay(10000000);
 //beMaster();
 // delay(100000000);
 //  for (int i = 0; i < 10; i++) {
 //    Serial2.write(111);
 //  }
-  while (Serial2.available() > 0) {
-//    Serial2.write(234);
-//    delay(500);
-//    __asm__("nop\n\t"); 
-     byte msg = Serial2.read();
-     Serial.println(msg);
-  }
-  return;
+//  while (Serial2.available() > 0) {
+////    Serial2.write(234);
+////    delay(500);
+////    __asm__("nop\n\t"); 
+////     delay(200);
+//     byte msg = Serial2.read();
+//     Serial.println(msg);
+//  }
+//  return;
 
   updateState();
 
@@ -308,8 +315,8 @@ void handleFirstBumpState() {
     stop(); delay(100);
 
     // Spin towards the line. (Since we undershoot a bit, it matters which way we turn.)
-    if (lastColor == BLUE) turn('r', 160);
-    else turn('l', 160);
+    if (lastColor == BLUE) turn('r', 150);// 160);
+    else turn('l', 150);// 160);
     stop(); delay(100);
 
     // Drive until we see the line.
@@ -872,6 +879,7 @@ void stop(int m1_high, int m1_low, int m2_high, int m2_low) {
 
 
 void setHighPin(int high_pin, int low_pin, int speed) {
+  speed = speed*MOTOR_POWER_MULTIPLIER;
   if (speed > 255) speed = 255;
 
   digitalWrite(low_pin, LOW);
@@ -879,6 +887,7 @@ void setHighPin(int high_pin, int low_pin, int speed) {
 }
 
 void setLowPin(int high_pin, int low_pin, int speed) {
+  speed = speed*MOTOR_POWER_MULTIPLIER;
   if (speed > 255) speed = 255;
 
   digitalWrite(high_pin, LOW);
