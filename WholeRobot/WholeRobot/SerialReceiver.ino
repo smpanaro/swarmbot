@@ -1,7 +1,5 @@
 #include <TimerOne.h>
 
-
-
 //Messages
 const byte BLUE_FOUND = 100; //d
 const byte RED_FOUND = 109; //m
@@ -29,88 +27,59 @@ const byte MY_NO_MESSAGE = 5;
 
 #define maskPin 34
 
-// void setup() {
-//   //Setup Oscillation
-//   pinMode(KPIN, OUTPUT);
-//   TCCR3A = _BV(COM3A0) | _BV(COM3B0) | _BV(WGM30) | _BV(WGM31);
-//   TCCR3B = _BV(WGM32) | _BV(WGM33) | _BV(CS31);
-//   OCR3A = 39; // sets the value at which the register resets. 39 generates 25kHz
-//   //Transmit Data Pin
-//   Serial2.begin(300);
-//   Serial.begin(9600);
-//   digitalWrite(RED_PIN, LOW);
-//   digitalWrite(BLUE_PIN, LOW);
-
-// }
-
-// void loop() {
-//  beSlave();
-// // beMaster();
-
-//   delay(100000);
-
-
-// }
-
-void beMaster()
-{
+void beMaster() {
   int color = RED_COLOR;
-    colorFound(color);
+  colorFound(color);
 
   lightLED(color);
-
 }
 
-void colorFound(int color)
-{
+void colorFound(int color) {
   for (; ; ) {
     byte msg;
     Serial.println("In colorFound");
     mask();
-      switch(color)
-      {
-        case RED_COLOR:
-          Serial2.write(MY_RED_FOUND);
-          break;
+    switch(color)
+    {
+      case RED_COLOR:
+      Serial2.write(MY_RED_FOUND);
+      break;
 
-        case BLUE_COLOR:
-          Serial2.write(MY_BLUE_FOUND);
-          break;
-      }
-      Serial2.flush();
-      unmask();
+      case BLUE_COLOR:
+      Serial2.write(MY_BLUE_FOUND);
+      break;
+    }
+    Serial2.flush();
+    unmask();
 
-      delay(PACKET_MILLIS);
-      msg = NO_MESSAGE;
-      while((Serial2.available()>0)&&(!isValid(msg = Serial2.read())));
-      if (isValid(msg)) {
+    delay(PACKET_MILLIS);
+    msg = NO_MESSAGE;
+    while((Serial2.available()>0)&&(!isValid(msg = Serial2.read())));
+    if (isValid(msg)) {
       Serial.print("Received");
       Serial.print(msg,DEC);
       Serial.println();
-      } else {
-        Serial.println("No data heard, timeout");
-      }
-      if(msg==RECEIVED){
-        return;
-      }
+    } else {
+      Serial.println("No data heard, timeout");
+    }
+    if(msg==RECEIVED){
+      return;
+    }
   }
+}
 
-  }
-
-void beSlave()
-{
+void beSlave() {
   Serial.println("In slave mode");
   boolean valid = false;
   byte m;
   Serial2.flush();
-  while(!valid)
-  {
+  while(!valid) {
     m = receiveMessage();
 
     if (isValid(m)) valid = true;
   }
   Serial.print("Received message:");
-    Serial.println(m);
+  Serial.println(m);
   pingBack();
   if(m == BLUE_FOUND)
     lightLED(BLUE_COLOR);
@@ -118,43 +87,41 @@ void beSlave()
     lightLED(RED_COLOR);
 
   valid = false;
-  while(!valid)
-  {
+  while(!valid) {
     m = receiveMessage();
 
     if (isValid(m)) valid = true;
   }
   Serial.print("Received message:");
-    Serial.println(m);
+  Serial.println(m);
 }
 
- void finishedMaster()
- {
+void finishedMaster() {
   for (; ; ) {
     mask();
     byte msg;
     Serial.println("In finishedMaster");
 
-      Serial2.write(MY_DONE_MSG);
+    Serial2.write(MY_DONE_MSG);
 
-      Serial2.flush();
-      unmask();
+    Serial2.flush();
+    unmask();
 
-      delay(PACKET_MILLIS);
-      msg = NO_MESSAGE;
-      while((Serial2.available()>0)&&(!isValid(msg = Serial2.read())));
-      if (msg != NO_MESSAGE) {
+    delay(PACKET_MILLIS);
+    msg = NO_MESSAGE;
+    while((Serial2.available()>0)&&(!isValid(msg = Serial2.read())));
+    if (msg != NO_MESSAGE) {
       Serial.print("Received msg");
       Serial.print(msg,DEC);
       Serial.println();
-      } else {
-        Serial.println("No data heard, timeout");
-      }
-      if(msg==RECEIVED){
-        return;
-      }
+    } else {
+      Serial.println("No data heard, timeout");
+    }
+    if(msg==RECEIVED){
+      return;
+    }
   }
- }
+}
 
 void pingBack() {
   for (int i = 0; i < NUM_PING_BACKS; i++) {
@@ -162,27 +129,36 @@ void pingBack() {
     Serial.println("pinging back");
     Serial2.write(MY_RECEIVED);
     Serial2.flush();
-    unmask();  
+    unmask();
   }
 }
 
-void lightLED(int color)
-{
+void lightLED(int color) {
   Serial.println("Lighting LED");
- if(color == RED_COLOR)
-   analogWrite(RED_PIN, 255);
- else
-   analogWrite(BLUE_PIN, 255);
+  if(color == RED_COLOR)
+    analogWrite(RED_PIN, 255);
+  else
+    analogWrite(BLUE_PIN, 255);
 }
 
 byte receiveMessage() {
+  if (Serial2.available() > 0) {
+    byte msg = Serial2.read();
+    return msg;
+  }
+  return 0;
+}
 
- if (Serial2.available() > 0) {
-     byte msg = Serial2.read();
-     return msg;
- }
+boolean isRecvd(byte msg) {
+  return (msg == RECEIVED);
+}
 
- return 0;
+boolean isDone(byte msg) {
+  return (msg == DONE_MSG);
+}
+
+boolean isColor(byte msg) {
+  return ((msg == BLUE_FOUND) || (msg == RED_FOUND));
 }
 
 boolean isValid(byte msg) {
@@ -190,14 +166,11 @@ boolean isValid(byte msg) {
   return ((msg == BLUE_FOUND) || (msg == RED_FOUND) || (msg == DONE_MSG) || (msg == RECEIVED));
 }
 
-void mask()
-{
+void mask() {
   digitalWrite(maskPin, LOW);
-
 }
 
-void unmask()
-{
+void unmask() {
   digitalWrite(maskPin, HIGH);
 }
 
