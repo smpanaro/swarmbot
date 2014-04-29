@@ -156,7 +156,7 @@ void setup(){
 //  else if (digitalRead(MASTER_CONTROL) == HIGH) mode = MASTER;
 //  else mode = SOLO;
 
-  mode = MASTER;
+  mode = SLAVE;
 
   //BLUE_PWM = 0;
 
@@ -183,11 +183,11 @@ void setup(){
 }
 
 void loop(){
-  
+/*
   Serial.print("current state: ");Serial.print(currentState);
   Serial.print(" current color: ");Serial.print(currentColor);
   Serial.print(" search state: ");Serial.println(((int)nextSearchState)-1);
-  
+*/
 
   /*calibrating turning
   left(TURN_SPEED);
@@ -213,7 +213,7 @@ void loop(){
 //  while (Serial2.available() > 0) {
 ////    Serial2.write(234);
 ////    delay(500);
-////    __asm__("nop\n\t"); 
+////    __asm__("nop\n\t");
 ////     delay(200);
 //     byte msg = Serial2.read();
 //     Serial.println(msg);
@@ -332,18 +332,18 @@ void handleFirstBumpState() {
       // Use lastColor since this is after we've stopped on the black.
       // e.g. communicateColor(lastColor);
       int c = -1; // reconcile different RED/BLUE pin values for now. Clean up later
-      if (lastColor == RED) c = 1;
-      else if (lastColor == BLUE) c = 2;
+      if (lastColor == RED || currentColor == RED) c = 1;
+      else if (lastColor == BLUE  || currentColor == BLUE) c = 2;
       COMM_PRINTLN("Entering colorFound after first bump.");
       colorFound(c);
       COMM_PRINTLN("Finished colorFound after first bump.");
 
       //Turn on the indicator LED for the color we found.
-      if (lastColor == RED) {
+      if (lastColor == RED || currentColor == RED) {
         digitalWrite(BLUE_INDICATOR_LED, LOW);
         digitalWrite(RED_INDICATOR_LED, HIGH);
       }
-      else if (lastColor == BLUE) {
+      else if (lastColor == BLUE || currentColor == BLUE) {
         digitalWrite(BLUE_INDICATOR_LED, HIGH);
         digitalWrite(RED_INDICATOR_LED, LOW);
       }
@@ -388,6 +388,16 @@ void handleEndOfLineState() {
   stop(); delay(100);
 
   if (mode == MASTER) {
+
+    // Spin around and move away from the other bot to prevent collisions.
+    if (lastColor == BLUE) left(TURN_SPEED);
+    else right(TURN_SPEED);
+    delayUntilBlack();
+    delayUntilColor();
+    stop(); delay(100);
+    forward(2000);
+    stop(); delay(100);
+
     // Inform the slave that we've finished our run. Yay.
     COMM_PRINTLN("Informing second bot that we are done.");
     finishedMaster();
@@ -408,6 +418,7 @@ void handleEndOfLineState() {
       delay(1000);
       digitalWrite(RED_INDICATOR_LED, LOW);
       digitalWrite(BLUE_INDICATOR_LED, LOW);
+      delay(1000);
     }
   }
   else if (mode == SLAVE) {

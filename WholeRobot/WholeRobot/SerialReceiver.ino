@@ -16,7 +16,7 @@ const byte MY_NO_MESSAGE = 5;
 
 
 #define PACKET_MILLIS 200
-#define NUM_PING_BACKS 10
+#define NUM_PING_BACKS 50
 
 // Colors
 #define RED_COLOR 1
@@ -35,6 +35,8 @@ void beMaster() {
 }
 
 void colorFound(int color) {
+  clearBuffer();
+  
   for (; ; ) {
     byte msg;
     Serial.println("In colorFound");
@@ -69,6 +71,8 @@ void colorFound(int color) {
 }
 
 void beSlave() {
+  clearBuffer();
+  
   Serial.println("In slave mode");
   boolean valid = false;
   byte m;
@@ -76,7 +80,8 @@ void beSlave() {
   while(!valid) {
     m = receiveMessage();
 
-    if (isValid(m)) valid = true;
+    // if (isValid(m)) valid = true;
+    if (isColor(m)) valid = true;
   }
   Serial.print("Received message:");
   Serial.println(m);
@@ -90,13 +95,16 @@ void beSlave() {
   while(!valid) {
     m = receiveMessage();
 
-    if (isValid(m)) valid = true;
+    // if (isValid(m)) valid = true;
+    if (isDone(m)) valid = true;
   }
   Serial.print("Received message:");
   Serial.println(m);
 }
 
 void finishedMaster() {
+  clearBuffer();
+  
   for (; ; ) {
     mask();
     byte msg;
@@ -158,6 +166,7 @@ boolean isDone(byte msg) {
 }
 
 boolean isColor(byte msg) {
+  if (msg != 0) Serial.println(msg);
   return ((msg == BLUE_FOUND) || (msg == RED_FOUND));
 }
 
@@ -172,5 +181,9 @@ void mask() {
 
 void unmask() {
   digitalWrite(maskPin, HIGH);
+}
+
+void clearBuffer() {
+  while(Serial2.available() > 0) Serial2.read();
 }
 
