@@ -98,6 +98,7 @@ void beSlave() {
     // if (isValid(m)) valid = true;
     if (isDone(m)) valid = true;
   }
+  pingBack();
   Serial.print("Received message:");
   Serial.println(m);
 }
@@ -158,10 +159,12 @@ byte receiveMessage() {
 }
 
 boolean isRecvd(byte msg) {
+  if (msg != 0) Serial.println(msg);
   return (msg == RECEIVED);
 }
 
 boolean isDone(byte msg) {
+  if (msg != 0) Serial.println(msg);
   return (msg == DONE_MSG);
 }
 
@@ -171,7 +174,7 @@ boolean isColor(byte msg) {
 }
 
 boolean isValid(byte msg) {
-  //if (msg != 0) Serial.println(msg);
+  if (msg != 0) Serial.println(msg);
   return ((msg == BLUE_FOUND) || (msg == RED_FOUND) || (msg == DONE_MSG) || (msg == RECEIVED));
 }
 

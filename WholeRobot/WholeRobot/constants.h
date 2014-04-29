@@ -10,5 +10,5 @@ enum state_t {
   NO_STATE          = (1 << 6)
 };
 enum search_state_t {START, PIVOT_LEFT, PIVOT_RIGHT, PIVOT_TO_ORIG_POS, REVERSE, DONE};
-enum mode_t {SOLO, MASTER, SLAVE};
+enum mode_t {SOLO, MASTER, SLAVE, DEBUG};
 

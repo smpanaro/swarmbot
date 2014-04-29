@@ -32,7 +32,7 @@
 #define M1_LOW_PIN 9
 #define M2_HIGH_PIN 6
 #define M2_LOW_PIN 7
-const float M1_DEFICIT = 0.75; //0.9552; // The percent of M2's power that M1 should get.
+const float M1_DEFICIT = 0.9552; // The percent of M2's power that M1 should get.
 const float MOTOR_POWER_MULTIPLIER = 1.35; // multiply all motor power by this.
 
 // Comm Pins
@@ -156,7 +156,7 @@ void setup(){
 //  else if (digitalRead(MASTER_CONTROL) == HIGH) mode = MASTER;
 //  else mode = SOLO;
 
-  mode = SLAVE;
+  mode = MASTER;
 
   //BLUE_PWM = 0;
 
@@ -219,6 +219,9 @@ void loop(){
 //     Serial.println(msg);
 //  }
 //  return;
+
+//beMaster();
+//return;
 
   updateState();
 
@@ -387,15 +390,17 @@ void handleSecondBumpState() {
 void handleEndOfLineState() {
   stop(); delay(100);
 
-  if (mode == MASTER) {
+  if (mode == MASTER || mode == DEBUG) {
 
     // Spin around and move away from the other bot to prevent collisions.
+    unsigned long turn_duration = millis();
     if (lastColor == BLUE) left(TURN_SPEED);
     else right(TURN_SPEED);
     delayUntilBlack();
     delayUntilColor();
+    turn_duration = millis() - turn_duration;
     stop(); delay(100);
-    forward(2000);
+    forward(FORWARD_SPEED);delay(1000);
     stop(); delay(100);
 
     // Inform the slave that we've finished our run. Yay.
@@ -410,6 +415,16 @@ void handleEndOfLineState() {
     COMM_PRINTLN("First bot being comms slave.");
     beSlave(); // slave in the communication sense, not the mode sense -- TODO: fix the naming...
     COMM_PRINTLN("First bot finished being comms slave.");
+    
+    // Return to the end of the line, turning the same way as before, now that the other bot is done.
+    // Turn the same way because last time, in theory we turn 180 and we want to repeat that without
+    // searching for the end of the line. 
+    if (lastColor == BLUE) left(TURN_SPEED);
+    else right(TURN_SPEED);
+    delay(turn_duration);
+    stop(); delay(100);
+    forward(FORWARD_SPEED);delay(1000);
+    stop(); delay(100);
 
     // Flash both LEDs 3 times, with a frequency of 1 flash/second. Then turn both LEDs off.
     for (int i = 0; i < 3; i++) {
