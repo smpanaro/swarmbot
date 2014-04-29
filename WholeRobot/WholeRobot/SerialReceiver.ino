@@ -144,10 +144,14 @@ void pingBack() {
 
 void lightLED(int color) {
   Serial.println("Lighting LED");
-  if(color == RED_COLOR)
+  if(color == RED_COLOR) {
     analogWrite(RED_PIN, 255);
-  else
+    analogWrite(BLUE_PIN, 0);
+  }
+  else {
     analogWrite(BLUE_PIN, 255);
+    analogWrite(RED_PIN, 0);
+  }
 }
 
 byte receiveMessage() {

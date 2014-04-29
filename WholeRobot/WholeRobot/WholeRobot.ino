@@ -156,7 +156,7 @@ void setup(){
 //  else if (digitalRead(MASTER_CONTROL) == HIGH) mode = MASTER;
 //  else mode = SOLO;
 
-  mode = MASTER;
+  mode = SLAVE;
 
   //BLUE_PWM = 0;
 
@@ -392,21 +392,23 @@ void handleEndOfLineState() {
 
   if (mode == MASTER || mode == DEBUG) {
 
-    // Spin around and move away from the other bot to prevent collisions.
-    unsigned long turn_duration = millis();
-    if (lastColor == BLUE) left(TURN_SPEED);
-    else right(TURN_SPEED);
-    delayUntilBlack();
-    delayUntilColor();
-    turn_duration = millis() - turn_duration;
-    stop(); delay(100);
-    forward(FORWARD_SPEED);delay(1000);
+    // Move away from the other bot to prevent collisions.
+    reverse(FORWARD_SPEED);delay(1500);
+    right(FORWARD_SPEED); delay(500);
     stop(); delay(100);
 
     // Inform the slave that we've finished our run. Yay.
     COMM_PRINTLN("Informing second bot that we are done.");
     finishedMaster();
     COMM_PRINTLN("Finished informing second bot that we are done.");
+
+    delay(5000); // wait for nick to move
+    // Return to the end of the line, turning the same way as before, now that the other bot is done.
+    // Turn the same way because last time, in theory we turn 180 and we want to repeat that without
+    // searching for the end of the line. 
+    left(FORWARD_SPEED); delay(500);
+    forward(FORWARD_SPEED);delay(1500);
+    stop(); delay(100);
 
     // Wait for the slave to tell us what color they found.
     // Turn on that indicator LED.
@@ -415,25 +417,15 @@ void handleEndOfLineState() {
     COMM_PRINTLN("First bot being comms slave.");
     beSlave(); // slave in the communication sense, not the mode sense -- TODO: fix the naming...
     COMM_PRINTLN("First bot finished being comms slave.");
-    
-    // Return to the end of the line, turning the same way as before, now that the other bot is done.
-    // Turn the same way because last time, in theory we turn 180 and we want to repeat that without
-    // searching for the end of the line. 
-    if (lastColor == BLUE) left(TURN_SPEED);
-    else right(TURN_SPEED);
-    delay(turn_duration);
-    stop(); delay(100);
-    forward(FORWARD_SPEED);delay(1000);
-    stop(); delay(100);
 
     // Flash both LEDs 3 times, with a frequency of 1 flash/second. Then turn both LEDs off.
-    for (int i = 0; i < 3; i++) {
-      digitalWrite(RED_INDICATOR_LED, HIGH);
-      digitalWrite(BLUE_INDICATOR_LED, HIGH);
-      delay(1000);
-      digitalWrite(RED_INDICATOR_LED, LOW);
-      digitalWrite(BLUE_INDICATOR_LED, LOW);
-      delay(1000);
+    for (int i = 0; i < 4; i++) {
+      analogWrite(RED_INDICATOR_LED, 255);
+      analogWrite(BLUE_INDICATOR_LED, 255);
+      delay(500);
+      analogWrite(RED_INDICATOR_LED, 0);
+      analogWrite(BLUE_INDICATOR_LED, 0);
+      delay(500);
     }
   }
   else if (mode == SLAVE) {
@@ -441,14 +433,14 @@ void handleEndOfLineState() {
     bool redIndicatorOn = false;
     if (digitalRead(RED_INDICATOR_LED) == HIGH) redIndicatorOn = true;
     if (redIndicatorOn) {
-      digitalWrite(RED_INDICATOR_LED, LOW);
+      analogWrite(RED_INDICATOR_LED, 0);
       delay(1000);
-      digitalWrite(RED_INDICATOR_LED, HIGH);
+      analogWrite(RED_INDICATOR_LED, 255);
     }
     else {
-      digitalWrite(BLUE_INDICATOR_LED, LOW);
+      analogWrite(BLUE_INDICATOR_LED, 0);
       delay(1000);
-      digitalWrite(BLUE_INDICATOR_LED, HIGH);
+      analogWrite(BLUE_INDICATOR_LED, 255);
     }
     // Communicate to master that we are done.
     COMM_PRINTLN("Second bot informing first bot that we are done.");
@@ -480,7 +472,7 @@ void handleLineFollowState() {
 void handleLineSearchState() {
   stop(); delay(100);
 
-  unsigned long turnTime = 350;
+  unsigned long turnTime = 380; //350;
   unsigned long overshootTime = 150;
 
   left(60);
