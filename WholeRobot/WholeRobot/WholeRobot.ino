@@ -83,6 +83,8 @@ search_state_t nextSearchState = START;
 // soundPin is set in Mario.h
 Servo flagServo;
 #define FLAG_PIN 10 // must be 9 or 10
+#define FLAG_5V 33
+#define FLAG_GND 34
 
 // Solo v. Swarm (Master v. Slave)
 // Connect either SLAVE_CONTROL or MASTER_CONTROL to 5V to enable slave or master.
@@ -144,8 +146,14 @@ void setup(){
   pinMode(RED_INDICATOR_LED, OUTPUT);
 
   // Go Beyond
-  // pinMode(soundPin, OUTPUT);
-  // flagServo.attach(FLAG_PIN);
+   pinMode(soundPin, OUTPUT);
+   pinMode(FLAG_5V, OUTPUT);
+   pinMode(FLAG_GND, OUTPUT);
+   digitalWrite(FLAG_5V, HIGH);
+   digitalWrite(FLAG_GND, LOW);
+   flagServo.attach(FLAG_PIN);
+   flagServo.write(10); // Start flag down.
+   
 
   // Determine Mode (Solo, Master or Slave)
   pinMode(SLAVE_GND, OUTPUT); digitalWrite(SLAVE_GND, LOW);
@@ -156,7 +164,7 @@ void setup(){
 //  else if (digitalRead(MASTER_CONTROL) == HIGH) mode = MASTER;
 //  else mode = SOLO;
 
-  mode = SLAVE;
+  mode = SOLO;
 
   //BLUE_PWM = 0;
 
@@ -180,6 +188,7 @@ void setup(){
     digitalWrite(BLUE_INDICATOR_LED, LOW);
     digitalWrite(RED_INDICATOR_LED, LOW);
   }
+  
 }
 
 void loop(){
@@ -196,12 +205,9 @@ void loop(){
   delay(100000);
   */
   //return;
+//   flagServo.write(10);
 
-  // flagServo.write(120);
-  // delay(3000);
-  // flagServo.write(10);
-  // delay(3000);
-  // return;ÂÂ
+//   return;
 
 //  beSlave();
   //delay(10000000);
@@ -450,9 +456,10 @@ void handleEndOfLineState() {
 
   // Victory song.
   Timer1.detachInterrupt();
-  // right(70); // This kind of messes up our final position, and accuracy is part of the requirements.
   marioFlag();
-  delay(5000);
+  delay(100);
+  flagServo.write(110);
+  delay(3000);
   stop(); delay(100);
 
   // Chill, cause we done.
